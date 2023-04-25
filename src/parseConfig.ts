@@ -3,6 +3,7 @@ import {exists, isSPARQLEndpoint, isValidURL, sparql_ask_query} from "./utils";
 import * as path from "path";
 import * as fs from "fs";
 import {QueryEngine} from "@comunica/query-sparql";
+import { readFileSync } from 'graceful-fs';
 
 //const config = require('../config/config.json')
 
@@ -18,11 +19,12 @@ export class Config implements IConfig{
 
     constructor(config_ins:string) {
         if (exists(config_ins)) {
+        JSON.parse(readFileSync(config_ins).toString());
             this._config = require(path.join(__dirname,config_ins))
         }
     }
     async setup():Promise<Config> {
-        if (this.config.sparql.sparqlEndpoint && this.config.sparql.sparqlQuery) {
+        if (this._config.sparql.sparqlEndpoint && this._config.sparql.sparqlQuery) {
             if (await isSPARQLEndpoint(this.config.sparql.sparqlEndpoint, sparql_ask_query)) {
                 this._sparqlEndpoint = this.config.sparql.sparqlEndpoint
             } else
@@ -54,6 +56,7 @@ export class Config implements IConfig{
         }
         return this
     }
+
     get config(){
         return this._config
     }
