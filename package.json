@@ -1,7 +1,7 @@
 {
-  "name": "autocompletion",
-  "version": "1.0.1",
-  "description": "autocompletion with Triple pattern fragments(TPF) ",
+  "name": "substring-bucketizer-index-proc",
+  "version": "0.0.1",
+  "description": "a process adheres to connector architecture to query a SPARQL endpoint, create bucketized quads and serialize a substring bucketizer index",
   "main": "index.js",
   "scripts": {
     "test": "jest",
@@ -32,23 +32,25 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jiaoxlong/autocompletion.git"
+    "url": "git+https://github.com/jiaoxlong/substring-bucketizer-index-proc.git"
   },
   "keywords": [
-    "autocompletion"
+    "substring bucketizer",
+    "substring bucketizer index"
   ],
   "author": "Jiao Long",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/jiaoxlong/autocompletion/issues"
+    "url": "https://github.com/jiaoxlong/substring-bucketizer-index-proc/issues"
   },
-  "homepage": "https://github.com/jiaoxlong/autocompletion#readme",
+  "homepage": "https://github.com/jiaoxlong/substring-bucketizer-index-proc#readme",
   "dependencies": {
     "@comunica/query-sparql": "^2.4.3",
     "@rdfjs/dataset": "^2.0.1",
     "@rdfjs/types": "^1.1.0",
     "@treecg/connector-types": "^1.1.3",
-    "@treecg/substring-bucketizer": "^2.1.1",
+    "@treecg/ldes-substring-bucketizer": "^0.0.8-alpha.0",
+    "@treecg/substring-bucketizer": "^2.1.6",
     "@treecg/types": "file:../types",
     "jest": "^29.4.1",
     "n3": "^1.16.2",

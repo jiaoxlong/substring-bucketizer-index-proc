@@ -2,17 +2,14 @@ import * as n3 from "n3"
 import {BlankNode, DataFactory, NamedNode, Term} from "n3";
 import {BucketizerCoreExtOptions, BucketizerCoreOptions, RDF, RDFS, SDS, SHACL, TREE} from '@treecg/types';
 import namedNode = DataFactory.namedNode;
-import {WIN_REGEX, WIN_RESERVE_REGEX, WIN_SYMBOL_REGEX} from "../lib/REGEX";
-import quad = DataFactory.quad;
-import literal = DataFactory.literal;
-//import {prefix} from "../lib/Prefix";
+
 import * as path from "path";
+import { Transform, TransformCallback, TransformOptions } from 'stream'
 
 import * as fs from 'fs';
 import * as fp from 'fs/promises'
-import type { Partial } from '@treecg/bucketizer-core';
-import {Config} from "../lib/parseConfig";
 import {QueryEngine} from "@comunica/query-sparql";
+import {TreeCollection} from "./tree";
 /**
  * counts the number of remaining items adheres to a substring relation
  * @param store an N3.Store instance
@@ -118,129 +115,6 @@ export function extract_resource_from_uri(s:string){
         return s
 }
 
-// export function tree_collection(store:n3.Store, tree_writer:n3.Writer, namespace_iri:string, bucket_base:string, query_path:string){
-//     /**
-//      * 1. First fetch all relation instances associated with root
-//      */
-//     for (const relation of [...store.getObjects(namedNode(bucket_base), namedNode(SDS.relation), null)]) {
-//         /**
-//          * as the mapping ratio between a tree:Relation instance and tree:Node/sds:Bucket through sds:relationBucket
-//          * is 1 to 1, we only expect the following loop iterates once.
-//          */
-//         for (const bucket of [...store.getSubjects(null, namedNode(SDS.relationBucket), relation)]) {
-//             tree_writer.addQuad(
-//                 quad(
-//                     namedNode(namespace_iri),
-//                     namedNode(TREE.relation),
-//                     relation
-//                 )
-//             )
-//             // tree:Relation rdf:type tree:SubstringRelation .
-//             tree_writer.addQuad(
-//                 quad(
-//                     <BlankNode>relation,
-//                     namedNode(RDF.type),
-//                     namedNode(TREE.SubstringRelation)
-//                 )
-//             )
-//             //tree:Relation tree:node SDS:Bucket .
-//             tree_writer.addQuad(
-//                 quad(
-//                     <BlankNode>relation,
-//                     namedNode(TREE.node),
-//                     bucket
-//                 )
-//             )
-//             // tree:Relation tree:value Literal .
-//             for (const rel_value of [...store.getObjects(<BlankNode>relation, namedNode(SDS.relationValue), null)]) {
-//                 tree_writer.addQuad(
-//                     quad(
-//                         <BlankNode>relation,
-//                         namedNode(TREE.value),
-//                         rel_value
-//                     )
-//                 )
-//             }
-//             // tree:Relation tree:path rdfs:label . or era:opName?
-//             tree_writer.addQuad(
-//                 quad(
-//                     <BlankNode>relation,
-//                     namedNode(TREE.path),
-//                     namedNode(query_path)
-//                 )
-//             )
-//             // tree:Relation sh:pattern "[\\p{L}\\p{N}]+" .
-//             tree_writer.addQuad(quad(<BlankNode>relation, namedNode(SHACL.pattern), literal('[\\\\p{L}\\\\p{N}]+')))
-//             // tree:Relation sh:flags "i"
-//             tree_writer.addQuad(quad(<BlankNode>relation, namedNode(SHACL.flags), literal('i')))
-//             // tree:Relation tree:remainingItems xsd:int .
-//             tree_writer.addQuad(quad(<BlankNode>relation, namedNode(TREE.remainingItems),
-//                 literal(<number>remainingItemsCount(store, <Term>relation))))
-//
-//             //one writer instance per bucket
-//             const writer = new n3.Writer(prefix);
-//
-//             /** sds:Record sds:bucket sds:Bucket.
-//              * todo: a use case when this is needed in the index?
-//              */
-//
-//             for (const record of [...store.getSubjects(namedNode(SDS.bucket), bucket, null)]) {
-//                 for (const member of [...store.getObjects(record, namedNode(SDS.payload), null)]){
-//                     // Tree:Collection tree:member tree:Member.
-//                     tree_writer.addQuad(
-//                         quad(
-//                             namedNode(namespace_iri),
-//                             namedNode(TREE.member),
-//                             member
-//                         )
-//                     )
-//                     // list members adheres to a bucket instance
-//                     writer.addQuads([...store.match(member, namedNode(query_path), null)])
-//                 }
-//             }
-//             /** visits quads associated with a bucket
-//              * Caution: a leaf bucket (node) has no relations
-//              */
-//
-//             const relations = [...store.getObjects(bucket, namedNode(SDS.relation), null)]
-//             if (relations.length !== 0) {
-//
-//                 for (const relation of relations) {
-//                     /** tree:Node tree:relation/sds:relation tree:Relation .
-//                      *  or sds:Bucket sds:relation tree:Relation .
-//                      */
-//                     writer.addQuad(quad(<NamedNode>bucket, namedNode(TREE.relation), relation))
-//                     // tree:Relation sh:pattern "[\\p{L}\\p{N}]+" .
-//                     writer.addQuad(quad(<BlankNode>relation, namedNode('http://www.w3.org/ns/shacl#pattern'), literal('[\\\\p{L}\\\\p{N}]+')))
-//                     // tree:Relation sh:flags "i"
-//                     writer.addQuad(quad(<BlankNode>relation, namedNode('http://www.w3.org/ns/shacl#flags'), literal('i')))
-//                     // tree:Relation tree:path rdfs:label . or era:opName?
-//                     writer.addQuad(quad(<BlankNode>relation, namedNode(TREE.path), namedNode(RDFS.label)))
-//                     // tree:Relation rdf:type tree:SubstringRelation
-//                     writer.addQuad(quad(<BlankNode>relation, namedNode(RDF.type), namedNode(TREE.SubstringRelation)))
-//                     // tree:Relation tree:remainingItems xsd:int .
-//                     let count = remainingItemsCount(store, <Term>relation)
-//                     writer.addQuad(quad(<BlankNode>relation, namedNode(TREE.remainingItems), literal(<number>count)))
-//
-//
-//                     for (const rel_value of [...store.getObjects(<BlankNode>relation, namedNode(SDS.relationValue), null)]) {
-//                         writer.addQuad(quad(<BlankNode>relation, namedNode(TREE.value), rel_value))
-//                     }
-//
-//                     for (const sub_bucket of [...store.getObjects(<BlankNode>relation, namedNode(SDS.relationBucket), null)]) {
-//                         // tree:Relation tree:node tree:Node/sds:Bucket .
-//                         const resource_bucket = extract_resource_from_uri(sub_bucket.value)
-//                         writer.addQuad(quad(<BlankNode>relation, namedNode(TREE.node), namedNode(sub_bucket.value.replace(
-//                             resource_bucket, escape(resource_bucket)))))
-//                     }
-//                 }
-//             }
-//             writer.end(async (error, result) => {
-//                 await writerToFile(result, path.join('data', escape(extract_resource_from_uri(bucket.value))));
-//             })
-//         }
-//     }
-// }
 
 export async function writerToFile(content: any, location: string) {
     try {
@@ -281,3 +155,11 @@ export function isValidURL(s:string) {
         '(\\#[-a-z\\d_]*)?$', 'i'); // validate fragment locator
     return !!urlPattern.test(s)
 }
+
+
+//https://stackoverflow.com/questions/11100821/javascript-regex-for-validating-filenames
+export const WIN_REGEX= new RegExp('^(con|prn|aux|nul|com[0-9]|lpt[0-9])$|([<>:"\\/\\\\|?*])|(\\.|\\s)$/ig')
+export const WIN_SYMBOL_REGEX = new RegExp('([<>:"\/\\|?*])|(\.|\s)$/g')
+export const WIN_RESERVE_REGEX = new RegExp('^(con|prn|aux|nul|com[0-9]|lpt[0-9])$')
+
+

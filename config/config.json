@@ -12,6 +12,8 @@
     "propertyPath": ["<http://data.europa.eu/949/opName>", "<http://data.europa.eu/949/uopi>"],
     "pageSize": "50"
   },
-  "prefixes": "../config/prefix.json"
+  "prefixes": "../config/prefix.json",
+  "relationType": "Substring",
+  "treeMembers": "false"
 
 }

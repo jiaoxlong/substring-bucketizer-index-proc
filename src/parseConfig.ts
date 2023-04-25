@@ -1,5 +1,5 @@
-import {IConfig, N3FormatTypes} from '../types';
-import {exists, isSPARQLEndpoint, isValidURL, sparql_ask_query} from "../utils/utils";
+import {IConfig, N3FormatTypes} from './types';
+import {exists, isSPARQLEndpoint, isValidURL, sparql_ask_query} from "./utils";
 import * as path from "path";
 import * as fs from "fs";
 import {QueryEngine} from "@comunica/query-sparql";

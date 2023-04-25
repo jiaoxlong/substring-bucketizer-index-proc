@@ -1,0 +1,30 @@
+@prefix js: <https://w3id.org/conn/js#> .
+@prefix : <https://w3id.org/conn#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+
+<> owl:imports <https://raw.githubusercontent.com/TREEcg/connector-architecture/main/channel/ws.ttl>.
+<> owl:imports <./processor/echo.ttl>, <./processor/send.ttl>, <./processor/resc.ttl>.
+
+[] a js:JsChannel;
+  :reader <jr>;
+  :writer <jw>.
+
+<jr> a :JsReaderChannel.
+<jw> a :JsWriterChannel.
+
+[] a :WsChannel;
+  :reader :WsReaderChannel;
+  :writer :WsWriterChannel.
+
+<wsReader> a :WsReaderChannel;
+  :wsPort "3000".
+
+<wsWriter> a :WsWriterChannel;
+  :wsUri "ws://localhost:3000".
+
+[] a js:Send;
+  js:msg "Hallo world";
+  js:sendWriter <wsWriter>.
+
+[] a js:Resc;
+  js:rescReader <wsReader>.
