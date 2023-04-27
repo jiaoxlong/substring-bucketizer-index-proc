@@ -16,13 +16,13 @@ import {TreeCollection} from "./tree";
  * @param relation a tree:Relation instance
  */
 
-export function remainingItemsCount(store:n3.Store, relation:Term):number|undefined{
+export function remainingItemsCount(store:n3.Store, relation:BlankNode|NamedNode):number|undefined{
     let count = 0
     for (const sub_bucket of [...store.getObjects(relation, namedNode(SDS.relationBucket), null)]){
         let count_extra = [...store.getSubjects(namedNode(SDS.bucket), sub_bucket, null)].length
         count += count_extra;
         for (const sub_relation of [...store.getObjects(sub_bucket, namedNode(SDS.relation), null)]) {
-            count += remainingItemsCount(store,sub_relation) || 0
+            count += remainingItemsCount(store,<BlankNode|NamedNode>sub_relation) || 0
         }
     }
     return count

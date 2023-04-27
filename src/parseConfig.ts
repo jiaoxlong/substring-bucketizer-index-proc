@@ -2,25 +2,29 @@ import {IConfig, N3FormatTypes} from './types';
 import {exists, isSPARQLEndpoint, isValidURL, sparql_ask_query} from "./utils";
 import * as path from "path";
 import * as fs from "fs";
-import {QueryEngine} from "@comunica/query-sparql";
 import { readFileSync } from 'graceful-fs';
 
 //const config = require('../config/config.json')
 
 export class Config implements IConfig{
-    _config!: { [p: string]: any };
-    _bucketizerOptions!: { [p: string]: any };
-    _namespace_iri!: string;
-    _namespace_prefix?:string;
-    _prefixes?: { [p: string]: string }|undefined;
-    _sparqlEndpoint?: string|undefined;
-    _sparqlQuery?: string|undefined;
-    _format?:typeof N3FormatTypes[number];
+    _config!: { [p: string]: any }
+    _configPath!: string
+    _bucketizerOptions!: { [p: string]: any }
+    _namespace_iri!: string
+    _path?:string
+    _namespace_prefix?:string
+    _prefixes?: { [p: string]: string }|undefined
+    _sparqlEndpoint?: string|undefined
+    _sparqlQuery?: string|undefined
+    _propertyPath!: string[]|string
+    _format?:typeof N3FormatTypes[number]
 
-    constructor(config_ins:string) {
-        if (exists(config_ins)) {
-        JSON.parse(readFileSync(config_ins).toString());
-            this._config = require(path.join(__dirname,config_ins))
+
+    constructor(config_path:string) {
+        if (exists(config_path)) {
+            this._config = JSON.parse(readFileSync(config_path).toString());
+            this._configPath = config_path
+            //this._config = require(path.join(__dirname,config_ins))
         }
     }
     async setup():Promise<Config> {
@@ -46,7 +50,21 @@ export class Config implements IConfig{
             if (exists(this.config.prefixes)) {
                 this._prefixes = this.config.prefixes
             }
+            if(this.config.bucketizerOptions.propertyPath!==undefined)
+                this._propertyPath = this.config.bucketizerOptions.propertyPath
+            else
+                throw new Error('propertyPath must be assigned!'  )
+
+            if(this.config.format !== undefined)
+                this._format = this.config.format
+            else
+                this._format = 'Turtle'
+            if(this.config.path !== undefined)
+                this._path = path.resolve(this.config.path)
+            else
+                this._path = path.resolve()
         }
+
         /**
          * reserved for other processors
          */
@@ -61,6 +79,10 @@ export class Config implements IConfig{
         return this._config
     }
 
+    get configPath(){
+        return this._configPath
+    }
+
     get sparqlEndpoint():string{
         return <string>this._sparqlEndpoint
     }
@@ -71,7 +93,9 @@ export class Config implements IConfig{
     get namespaceIRI():string{
         return this._namespace_iri
     }
-
+    get path():string{
+        return <string>this._path
+    }
     get namespacePrefix():string{
         return <string>this._namespace_prefix
     }
@@ -82,14 +106,17 @@ export class Config implements IConfig{
     get prefixes():{[p:string]:string} | undefined{
         return this._prefixes
     }
-    get format():string|undefined{
-        if (this.config.format){
-            return this.config.format
-        }
-        else{
-            return 'Turtle'
-        }
+    get propertyPath():string[]|string{
+        return this._propertyPath
     }
+    get format():string|undefined{
+        return this._format
+    }
+}
 
-
+let _config: Config | undefined;
+export function getConfig(configPath: string): Config {
+    if (_config) return _config;
+    _config = new Config(configPath);
+    return _config;
 }

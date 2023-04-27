@@ -4,6 +4,7 @@
   "description": "a process adheres to connector architecture to query a SPARQL endpoint, create bucketized quads and serialize a substring bucketizer index",
   "main": "index.js",
   "scripts": {
+    "build": "tsc",
     "test": "jest",
     "watch-test": "jest --watch"
   },

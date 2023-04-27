@@ -1,18 +1,22 @@
+import * as n3 from "n3";
 import {Partial} from "@treecg/bucketizer-core";
 import {BucketizerCoreExtOptions} from "@treecg/types";
-import {BlankNode, Literal, NamedNode, Quad} from "@rdfjs/types";
-import type * as RDF from '@rdfjs/types';
-import {TreeCollection, TreeMember, TreeRelation, TreeResource, TreeShape} from './tree'
+import {BlankNode, Literal, NamedNode, Quad, Term} from "@rdfjs/types";
+import {TreeCollection, TreeMember, TreeNode, TreeRelation, TreeResource, TreeShape} from './tree'
+import {Config} from "./parseConfig";
 
 export interface IConfig {
     /** sparql endpoint */
     _config:{[key:string]: any}
+    _configPath:string
     _sparqlEndpoint?: string|undefined
     _sparqlQuery?: string|undefined
     _namespace_iri: string
     _namespace_prefix?: string
     _bucketizerOptions:Partial<BucketizerCoreExtOptions>
+    _propertyPath:string[]|string
     _prefixes?:{[p:string]: string}|undefined
+    _path?:string|undefined
 
 }
 
@@ -31,11 +35,14 @@ export interface SerializationInterface {
  * Todo: integrate Node into Treecg/types
  */
 export interface NodeInterface {
-    id: NamedNode,
-    isTreeMember:boolean,
-    showTreeMember:boolean,
-    members?:TreeMember[],
+    id: NamedNode
+    config:Config
+    store:n3.Store
+    isTreeMember:boolean
+    showTreeMember:boolean
+    members?:TreeMember[]
     relations?: TreeRelation[]
+    sub_nodes?: NamedNode[]
     quads:Quad[]
 }
 
@@ -45,6 +52,7 @@ export interface NodeInterface {
 export interface CollectionInterface extends NodeInterface{
     shape?:TreeShape,
     resource:TreeResource|TreeResource[]
+    nodes:TreeNode[]
     serialize_metadata():Quad[]
 }
 
@@ -86,7 +94,7 @@ export interface RelationInterface {
     /** relation type see sds:relationType */
     type: RelationType
     /** target bucket for a relation see: sds:relationBucket*/
-    relation_node: NamedNode|BlankNode
+    relation_node: NamedNode
     /** relation value see: sds:relationValue and tree:value */
     value?: Literal | Literal[]
     /** relation (property) path(s) see sds:relationPath or tree:path */
