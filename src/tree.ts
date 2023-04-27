@@ -202,19 +202,8 @@ export class TreeCollection extends TreeNode implements CollectionInterface, Ser
     })
   }
   materialize_nodes(){
-    for (const node of this.nodes){
-      const node_writer = new n3.Writer(this.config.prefixes)
-      const node_ins = new TreeNode(node, this.config.configPath, this.store,false, true)
-      node_writer.addQuads(node_ins.quads)
-      node_writer.end(async (error: any, quads) => {
-        const out = PATH.join(PATH.resolve(this.config.path), escape(extract_resource_from_uri(node_ins.id.value)) + '.ttl')
-        if (!fs.existsSync(PATH.resolve(out)))
-          fs.mkdirSync(PATH.resolve(out), {recursive: true})
-        fs.writeFile(out, quads, (err: any) => {
-          if (err)
-            throw err;
-        });
-      })
+    for (const node of this.nodes) {
+      const node_ins = new TreeNode(node, this.config.configPath, this.store, false, true)
     }
   }
 }

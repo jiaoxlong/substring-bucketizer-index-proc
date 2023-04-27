@@ -2,14 +2,12 @@ import { QueryEngine } from "@comunica/query-sparql";
 import {Config, getConfig} from "./parseConfig";
 import * as n3 from "n3";
 import { SubstringBucketizer } from "@treecg/substring-bucketizer";
-import { exists, extract_resource_from_uri, remainingItemsCount, writerToFile, escape } from "./utils";
 import type { AsyncIterator } from 'asynciterator';
 import { Partial } from "@treecg/bucketizer-core";
 import { BucketizerCoreExtOptions } from "@treecg/types";
 import {Store, DataFactory} from "n3";
 
 import namedNode = DataFactory.namedNode;
-import blankNode = DataFactory.blankNode;
 import { TreeCollection } from "./tree";
 
 import { Stream, Writer } from "@treecg/connector-types";
@@ -79,9 +77,15 @@ function substringBucketize(bucketizerOptions: Partial<BucketizerCoreExtOptions>
 async function ingest(configPath: string, reader: Stream<string>) {
   const config = getConfig(configPath)
   const tree_collection_node = namedNode(config.namespaceIRI)
-  reader.data(async quadString => {
+  const store = new n3.Store()
+  reader
+      .on('data', async quadString => {
     const quads = new n3.Parser().parse(quadString);
-    const store = new n3.Store(quads);
-    const collection = new TreeCollection(tree_collection_node, configPath, store);
+    await store.addQuads(quads);
+
   })
+      .on('end', async () => {
+        const tree_collection = new TreeCollection(tree_collection_node, configPath, store)
+          }
+      )
 }
