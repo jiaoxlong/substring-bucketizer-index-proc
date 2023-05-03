@@ -31,28 +31,34 @@ export interface SerializationInterface {
     serialize():Quad[]
 }
 
+export interface MaterializationInterface{
+    materialize():Promise<any>
+}
+
 /**
- * Todo: integrate Node into Treecg/types
+ * Todo: integrate types into Treecg/types
  */
-export interface NodeInterface {
+
+export interface BaseNodeInterface{
     id: NamedNode
     config:Config
     store:n3.Store
     isTreeMember:boolean
     showTreeMember:boolean
-    members?:TreeMember[]
-    relations?: TreeRelation[]
-    sub_nodes?: NamedNode[]
+    members:TreeMember[]
+    relations:TreeRelation[]
+}
+export interface NodeInterface extends BaseNodeInterface {
     quads:Quad[]
 }
 
 /**
  * Todo: integrate Collection into Treecg/types
  */
-export interface CollectionInterface extends NodeInterface{
+export interface CollectionInterface extends BaseNodeInterface{
+    root_node:NamedNode
     shape?:TreeShape,
     resource:TreeResource|TreeResource[]
-    nodes:TreeNode[]
     serialize_metadata():Quad[]
 }
 

@@ -14,6 +14,5 @@
   },
   "prefixes": "../config/prefix.json",
   "relationType": "Substring",
-  "treeMembers": "false",
   "path": "."
 }

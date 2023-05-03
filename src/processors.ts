@@ -1,29 +1,29 @@
 import { QueryEngine } from "@comunica/query-sparql";
-import {Config, getConfig} from "./parseConfig";
+import {getConfig} from "./parseConfig";
 import * as n3 from "n3";
-import { SubstringBucketizer } from "@treecg/substring-bucketizer";
-import type { AsyncIterator } from 'asynciterator';
-import { Partial } from "@treecg/bucketizer-core";
-import { BucketizerCoreExtOptions } from "@treecg/types";
+import {SDS} from "@treecg/types";
 import {Store, DataFactory} from "n3";
 
 import namedNode = DataFactory.namedNode;
-import { TreeCollection } from "./tree";
+import {TreeCollection, TreeNode} from "./tree";
 
 import { Stream, Writer } from "@treecg/connector-types";
-import {BlankNode, Literal, NamedNode, Quad, Term} from "@rdfjs/types";
+import {Quad} from "@rdfjs/types";
+import quad = DataFactory.quad;
 
 const queryEngine = new QueryEngine();
 
-/**
- * a process fetches query result from a SPRAQL endpoint defined in a Bucketizer index config file.
- */
 
 function serialiaze_quads(quads: Quad[]): string {
   return new n3.Writer().quadsToString(quads);
 }
 
 
+/**
+ * The query_sparql processor fetches query result from a SPRAQL endpoint
+ * @param configPath PATH to a config file. For example, ./config.json
+ * @param writer a stream writer instance
+ */
 export async function query_sparql(configPath: string, writer: Writer<string>) {
   const config = getConfig(configPath);
   const quadStream = await queryEngine.queryQuads(config.sparqlQuery, { sources: [config.sparqlEndpoint] });
@@ -31,61 +31,30 @@ export async function query_sparql(configPath: string, writer: Writer<string>) {
   await writer.push(serialiaze_quads(quads));
 }
 
-
 /**
- * [Obsolete]
- * Use https://github.com/ajuvercr/sds-processors/blob/master/sdsify.ttl
- * arrayify a quad stream to an array of quads
- * @param quad_stream A quad stream
+ * The ingest processor transforms SDS data streamed from bucketization into a TREE index
+ * @param configPath PATH to a config file. For example, ./config.json
+ * @param reader a stream reader instance
  */
-
-async function quadStreamToArray(quad_stream: AsyncIterator<Quad>): Promise<{ [key: string]: Quad[] }> {
-  const quads = await quad_stream.toArray()
-  let triple_map: { [key: string]: Quad[] } = {}
-  for (const quad of quads) {
-    if (!triple_map.hasOwnProperty(quad.subject.value)) {
-      triple_map[quad.subject.value] = []
-      triple_map[quad.subject.value].push(<Quad>quad);
-    } else {
-      triple_map[quad.subject.value].push(<Quad>quad)
-    }
-  }
-  return triple_map
-}
-
-/**
- * [Obsolete]
- * Use https://github.com/ajuvercr/sds-processors/blob/master/2_bucketstep.ttl
- * creates N3.Store instance with the bucketized quads
- * @param bucketizerOptions
- * @param triple_map an array of bucketized quads
- * @param writeTo when defined, it writes quads into a file with the value (path) assigned to writeTo
- */
-
-function substringBucketize(bucketizerOptions: Partial<BucketizerCoreExtOptions>,
-  triple_map: { [key: string]: Quad[] }): Store<any> {
-
-  let rdf: any = [];
-  const bucketizer = SubstringBucketizer.build(bucketizerOptions);
-  for (const [subject, quads] of Object.entries(triple_map)) {
-    rdf.push(bucketizer.bucketize(quads, subject))
-    rdf.push(quads)
-  }
-  return new n3.Store(rdf.flat(2))
-}
-
 async function ingest(configPath: string, reader: Stream<string>) {
   const config = getConfig(configPath)
-  const tree_collection_node = namedNode(config.namespaceIRI)
   const store = new n3.Store()
+  const tree_collection = new TreeCollection(namedNode(config.namespaceIRI),configPath, store, false,false)
   reader
       .on('data', async quadString => {
-    const quads = new n3.Parser().parse(quadString);
-    await store.addQuads(quads);
-
-  })
+        // transform SDS bucket to TREE node
+        const quads = new n3.Parser().parse(quadString);
+        store.addQuads(quads);
+        const node_id = [...store.getObjects(null, namedNode(SDS.bucket),null)].pop()
+        const node_ins = new TreeNode(namedNode(node_id!.value),configPath, store)
+        // move showTreeMember to config
+        if (tree_collection.showTreeMember) tree_collection.addMembers(node_ins.members)
+        // only index relations directly associated with root node
+        if (store.has(quad(tree_collection.root_node, namedNode(SDS.relation), node_id!)))
+            tree_collection.addRelations(node_ins.relations)
+        await node_ins.materialize()
+      })
       .on('end', async () => {
-        const tree_collection = new TreeCollection(tree_collection_node, configPath, store)
-          }
-      )
+          await tree_collection.materialize()
+      })
 }

@@ -7,7 +7,7 @@ import {
   RelationInterface,
   RelationType,
   SerializationInterface,
-  ResourceType
+  ResourceType, BaseNodeInterface, MaterializationInterface
 } from "./types";
 import { RDF, SDS, SHACL, TREE } from "../../types";
 import {BlankNode, Literal, NamedNode, Quad, Term} from "@rdfjs/types";
@@ -21,34 +21,95 @@ import { escape, extract_resource_from_uri, remainingItemsCount } from "./utils"
 import {Config, getConfig} from "./parseConfig";
 import * as PATH from "path";
 import fs from "fs";
-import path from "path";
 
-export class TreeNode implements NodeInterface, SerializationInterface {
+export class TreeBaseNode implements BaseNodeInterface, SerializationInterface{
   id: NamedNode
   config: Config
   store: n3.Store
+  //When isTreeMember is set to false by default, no link between tree:members and tree:node .
   isTreeMember: boolean
   showTreeMember: boolean
-  members?: TreeMember[]
-  relations?: TreeRelation[]
-  sub_nodes?: NamedNode[]
-  quads: Quad[]
-
+  members:TreeMember[]
+  relations: TreeRelation[]
   constructor(id: NamedNode,
               config:string,
               store:n3.Store,
               isTreeMember: boolean = false,
-              showTreeMember: boolean = true) {
+              showTreeMember: boolean = false){
     this.id = namedNode(id.value.replace(extract_resource_from_uri(id.value), escape(id.value)))
     this.config = getConfig(config)
     this.store = store
     this.isTreeMember = isTreeMember
     this.showTreeMember = showTreeMember
-    this.members = this.addMembers()
+    this.members = []
+    this.relations = []
+  }
+  addRelation(treeRelation:TreeRelation){
+    this.relations.push(treeRelation)
+  }
+  addMember(treeMember:TreeMember){
+    this.members.push(treeMember)
+  }
+  serialize(): Quad[] {
+    let quads: Quad[] = []
+    /**
+     * add relation quads
+     */
+    if (this.relations.length !== 0) {
+      for (const rel of this.relations) {
+        //tree:Node tree:relation tree:Relation.
+        quads.push(quad(this.id, namedNode(TREE.relation), rel.id))
+        quads.concat(rel.quads)
+      }
+    }
+    /**
+     * add member quads
+     */
+    if (this.showTreeMember && this.members.length !== 0 )
+      for (const member of this.members){
+        quads.concat(member.quads)
+      }
+    return quads
+  }
+}
+
+export class TreeNode extends TreeBaseNode implements NodeInterface, MaterializationInterface{
+  quads: Quad[]
+  constructor(id: NamedNode,
+              config:string,
+              store:n3.Store,
+              isTreeMember: boolean = false,
+              showTreeMember: boolean = true) {
+    super(id, config, store, isTreeMember, showTreeMember);
+    this.members = this.showTreeMember ?this.addMembers():[]
     this.relations = this.addRelations()
     this.quads = this.serialize()
   }
-
+  addRelations():TreeRelation[]{
+    let treeNodeRelations: TreeRelation[] = []
+    if(this.store.size!==0) {
+      const relations= [...this.store.getObjects(this.id, namedNode(SDS.relation), null)]
+      const prop_path = (typeof this.config.propertyPath === 'string') ?
+          this.config.propertyPath : this.config.propertyPath[0]
+      if (relations.length !== 0) {
+        for (const relation of relations) {
+          for (const sub_bucket of [...this.store.getObjects(relation, namedNode(SDS.relationBucket), null)]) {
+            const resource_bucket = extract_resource_from_uri(sub_bucket.value)
+            for (const rel_value of [...this.store.getObjects(relation, namedNode(SDS.relationValue), null)]) {
+              treeNodeRelations.push(new TreeRelation(
+                  <NamedNode|BlankNode>relation,
+                  RelationType.Substring,
+                  namedNode(sub_bucket.value.replace(resource_bucket, escape(resource_bucket))),
+                  <Literal>rel_value,
+                  namedNode(prop_path),
+                  remainingItemsCount(this.store, <n3.NamedNode|n3.BlankNode>relation) ))
+            }
+          }
+        }
+      }
+    }
+    return treeNodeRelations
+  }
   addMembers():TreeMember[]{
     let nodeMembers:TreeMember[] = []
 
@@ -61,108 +122,44 @@ export class TreeNode implements NodeInterface, SerializationInterface {
     }
       return nodeMembers
   }
-  addRelations():TreeRelation[]{
-    const relations = [...this.store.getObjects(this.id, namedNode(SDS.relation), null)]
-    let treeNodeRelations: TreeRelation[] = []
-    const prop_path = (typeof this.config.propertyPath === 'string') ?
-        this.config.propertyPath : this.config.propertyPath[0]
-    if (relations.length !== 0) {
-      for (const relation of relations) {
-        for (const sub_bucket of [...this.store.getObjects(relation, namedNode(SDS.relationBucket), null)]) {
-          const resource_bucket = extract_resource_from_uri(sub_bucket.value)
-          for (const rel_value of [...this.store.getObjects(relation, namedNode(SDS.relationValue), null)]) {
-            treeNodeRelations.push(new TreeRelation(
-                <NamedNode|BlankNode>relation,
-                RelationType.Substring,
-                namedNode(sub_bucket.value.replace(resource_bucket, escape(resource_bucket))),
-                <Literal>rel_value,
-                namedNode(prop_path),
-                remainingItemsCount(this.store, <n3.NamedNode|n3.BlankNode>relation) ))
-          }
-        }
-      }
-    }
-    return treeNodeRelations
-  }
-  serialize(): Quad[] {
-    let node_quads: Quad[] = []
-    /**
-     * tree:Node --> tree:Relation
-     *
-     */
-    if (this.relations !== undefined && this.relations.length !== 0) {
-      for (const rel of this.relations) {
-        //tree:Node tree:relation tree:Relation.
-        node_quads.push(quad(this.id, namedNode(TREE.relation), rel.id))
-        node_quads = [...node_quads, ...rel.quads]
-      }
-    }
-    /**
-     * tree:member(s)
-     * When isTreeMember is set to false by default, no link between tree:members and tree:node .
-     * They are self-contained members within a fragment/tree:Node.
-     */
-    if (this.showTreeMember) {
-      if (this.members !== undefined) {
-        for (const member of this.members) {
-          if (this.isTreeMember) {
-            node_quads.push(quad(this.id, namedNode(TREE.member), member.id))
-          }
-          node_quads = [...node_quads, ...member.quads]
-        }
-      }
-    }
-    return node_quads
-  }
-  materialize():void{
+
+  async materialize():Promise<any>{
     const tree_node_writer = new n3.Writer({prefixes:this.config.prefixes})
     tree_node_writer.addQuads(this.quads)
-    tree_node_writer.end( (error:any, quads) => {
+    tree_node_writer.end( async(error:any, quads) => {
       const out = PATH.join(PATH.resolve(this.config.path), escape(extract_resource_from_uri(this.id.value))+'.ttl')
       if(!fs.existsSync(PATH.resolve(out)))
         fs.mkdirSync(PATH.resolve(out), {recursive: true})
-      fs.writeFile(out, quads, (err:any) =>{
-        if (err) throw err;
+        await fs.writeFile(out, quads, (err:any) =>{
+          if (err) throw err;
       });
     })
   }
 }
 
-export class TreeCollection extends TreeNode implements CollectionInterface, SerializationInterface {
+export class TreeCollection extends TreeBaseNode implements CollectionInterface, MaterializationInterface {
+  root_node: NamedNode
   shape?: TreeShape
   resource: TreeResource | TreeResource[]
-  nodes: any
-  constructor(id: NamedNode,
-    config:string, store:n3.Store,
-    isTreeMember: boolean = false,
-    showTreeMember: boolean = false,
-  ) {
-    super(id, config, store, isTreeMember, showTreeMember);
-    this.nodes = this.addNodes()
-    this.members = this.addMembers()
-    this.relations = this.addRelations()
+  quads: Quad[]
+  constructor(id: NamedNode, config:string, store:n3.Store, isTreeMember: boolean = false, showTreeMember: boolean = false){
+    super(id, config, store, isTreeMember, showTreeMember)
+    this.root_node = (this.config.bucketizerOptions.root === '') ? namedNode(this.config.bucketizerOptions.bucketBase + 'root') :
+        namedNode(this.config.bucketizerOptions.bucketBase + this.config.bucketizerOptions.root)
+    this.quads = []
     this.resource = new TreeResource(this.id, ResourceType['subset'], this.id)
     this.shape = new TreeShape(blankNode(), this.config.bucketizerOptions.propertyPath.map(namedNode))
-    this.quads = [...this.serialize(),...this.serialize_metadata()]
-    this.materialize()
-    this.materialize_nodes()
+
   }
-  addNodes() {
-    const all_nodes = [...this.store.getObjects(null, namedNode(SDS.bucket), null)]
-    return all_nodes.filter(node => node !== this.id)
+  addRelations(treeRelations:TreeRelation[]){
+    this.relations.concat(treeRelations)
   }
 
-  addMembers():TreeMember[]{
-    let collectionMembers:TreeMember[]=[];
-    for (const bucket of [...this.store.getObjects(null, namedNode(SDS.bucket), null)]) {
-      for (const record of [...this.store.getSubjects(namedNode(SDS.bucket), bucket, null)]) {
-        for (const member of [...this.store.getObjects(record, namedNode(SDS.payload), null)]){
-          collectionMembers.push(new TreeMember(namedNode(member.id),
-              [...this.store.match(member, null, null)]))
-        }
-      }
-    }
-    return collectionMembers
+  serialization(){
+    this.quads.concat([...this.serialize(),...this.serialize_metadata()])
+  }
+  addMembers(treeMembers:TreeMember[]){
+    this.members.concat(treeMembers)
   }
 
   serialize_metadata() {
@@ -188,23 +185,18 @@ export class TreeCollection extends TreeNode implements CollectionInterface, Ser
     return md_quads
   }
 
-  materialize() {
+  async materialize():Promise<any> {
     const tree_collection_writer = new n3.Writer({prefixes: this.config.prefixes})
     tree_collection_writer.addQuads(this.quads)
     tree_collection_writer.end(async (error: any, quads) => {
       const out = PATH.join(PATH.resolve(this.config.path), 'tree_collection.ttl')
       if (!fs.existsSync(PATH.resolve(out)))
         fs.mkdirSync(PATH.resolve(out), {recursive: true})
-      fs.writeFile(out, quads, (err: any) => {
+        await fs.writeFile(out, quads, (err: any) => {
         if (err)
           throw err;
       });
     })
-  }
-  materialize_nodes(){
-    for (const node of this.nodes) {
-      const node_ins = new TreeNode(node, this.config.configPath, this.store, false, true)
-    }
   }
 }
 
