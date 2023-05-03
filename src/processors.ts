@@ -55,6 +55,7 @@ async function ingest(configPath: string, reader: Stream<string>) {
         await node_ins.materialize()
       })
       .on('end', async () => {
+          tree_collection.serialization()
           await tree_collection.materialize()
       })
 }
