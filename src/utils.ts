@@ -156,7 +156,20 @@ export function isValidURL(s:string) {
     return !!urlPattern.test(s)
 }
 
+export function isTreeCollection(quadString: string):boolean{
+    return (quadString.match(tree_collection_regex) ===null) ? false : true
+}
 
+export function treeCollectionID(quadString:string):string{
+    return tree_collection_regex.exec(quadString)![1]
+}
+
+export function treeNodeID(quadString:string):string{
+    return tree_node_regex.exec(quadString)![1]
+}
+
+const tree_collection_regex = new RegExp("(.+)\\s{1,4}a\\s{1,4}(?:tree:|.+\\#)Collection")
+const tree_node_regex = new RegExp("(.+)\\s{1,4}tree:relation")
 //https://stackoverflow.com/questions/11100821/javascript-regex-for-validating-filenames
 export const WIN_REGEX= new RegExp('^(con|prn|aux|nul|com[0-9]|lpt[0-9])$|([<>:"\\/\\\\|?*])|(\\.|\\s)$/ig')
 export const WIN_SYMBOL_REGEX = new RegExp('([<>:"\/\\|?*])|(\.|\s)$/g')
