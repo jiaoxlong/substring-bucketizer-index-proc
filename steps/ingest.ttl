@@ -12,9 +12,9 @@
   :build "npm install; npm run build";
 ].
 
-js:QuerySparql a js:JsProcess;
+js:Ingest a js:JsProcess;
   js:file "./lib/processors.js";
-  js:function "querySparql";
+  js:function "ingest";
   js:location <./>;
   js:mapping [
     a fno:Mapping;
@@ -24,18 +24,26 @@ js:QuerySparql a js:JsProcess;
       fnom:implementationParameterPosition "0"^^xsd:int
     ], [
       a fnom:PositionParameterMapping ;
-      fnom:functionParameter js:sparqlResultStream ;
+      fnom:functionParameter js:treeNodeInputStream ;
       fnom:implementationParameterPosition "1"^^xsd:int
+    ],[
+      a fnom:PositionParameterMapping ;
+      fnom:functionParameter js:treeNodeOutputStream ;
+      fnom:implementationParameterPosition "2"^^xsd:int
     ].
 
 [] a sh:NodeShape;
-  sh:targetClass js:QuerySparql;
+  sh:targetClass jjs:Ingestl;
   sh:property [
     sh:datatype xsd:string;
     sh:path js:configPath;
     sh:name "Location of config file";
   ],[
-    sh:class :WriterChannel;
-    sh:path js:sparqlResultStream;
-    sh:name "Data output channel";
+    sh:class :ReaderChannel;
+    sh:path js:treeNodeOutputStream;
+    sh:name "TREE node input channel";
+  ],[
+    sh:class :ReaderChannel;
+    sh:path js:outputStream;
+    sh:name "TREE collection input channel";
   ].
