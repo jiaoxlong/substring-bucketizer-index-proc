@@ -40,10 +40,10 @@ js:Ingest a js:JsProcess;
     sh:name "Location of config file";
   ],[
     sh:class :ReaderChannel;
-    sh:path js:treeNodeOutputStream;
+    sh:path js:treeNodeInputStream;
     sh:name "TREE node input channel";
   ],[
     sh:class :ReaderChannel;
-    sh:path js:outputStream;
+    sh:path js:treeCollectionInputStream;
     sh:name "TREE collection input channel";
   ].
