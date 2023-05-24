@@ -1,0 +1,10 @@
+@prefix ex: <http://example.org/ns#> .
+@prefix ldes: <https://w3id.org/ldes#> .
+@prefix tree: <https://w3id.org/tree#> .
+
+
+ex:BucketizeStrategy a  ldes:BucketizeStrategy;
+    ldes:bucketType ldes:substring;
+    tree:path <http://data.europa.eu/949/opName>;
+    ldes:pageSize 50.
+

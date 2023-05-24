@@ -4,6 +4,7 @@
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix : <https://w3id.org/conn#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
 
 <> owl:imports <https://raw.githubusercontent.com/ajuvercr/js-runner/master/ontology.ttl>.
 <> :install [
@@ -13,9 +14,9 @@
 ].
 
 js:QuerySparql a js:JsProcess;
-  js:file "./lib/processors.js";
+  js:file <../lib/src/processors.js>;
   js:function "querySparql";
-  js:location <./>;
+  js:location <../>;
   js:mapping [
     a fno:Mapping;
     fno:parameterMapping [
@@ -26,7 +27,8 @@ js:QuerySparql a js:JsProcess;
       a fnom:PositionParameterMapping ;
       fnom:functionParameter js:sparqlResultStream ;
       fnom:implementationParameterPosition "1"^^xsd:int
-    ].
+    ]
+  ] .
 
 [] a sh:NodeShape;
   sh:targetClass js:QuerySparql;

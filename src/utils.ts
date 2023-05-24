@@ -1,5 +1,5 @@
 import * as n3 from "n3"
-import {BlankNode, DataFactory, NamedNode, Term} from "n3";
+import {BlankNode, DataFactory, Literal, NamedNode, Term} from "n3";
 import {BucketizerCoreExtOptions, BucketizerCoreOptions, RDF, RDFS, SDS, SHACL, TREE} from '@treecg/types';
 import namedNode = DataFactory.namedNode;
 
@@ -9,7 +9,11 @@ import { Transform, TransformCallback, TransformOptions } from 'stream'
 import * as fs from 'fs';
 import * as fp from 'fs/promises'
 import {QueryEngine} from "@comunica/query-sparql";
-import {TreeCollection} from "./tree";
+import {TreeCollection, TreeRelation} from "./tree";
+import PATH from "path";
+import {Config, getConfig} from "./parseConfig";
+import {RelationType} from "./types";
+import literal = DataFactory.literal;
 /**
  * counts the number of remaining items adheres to a substring relation
  * @param store an N3.Store instance
@@ -55,6 +59,8 @@ export function invalidWINSYM(bucket_base:string):boolean{
 /**
  * escapes by replacing a symbol with its unicode character when illegal symbols were found,
  * or by adding a '%' to the end of a bucketbase string when the bucketbase is named with reserved WIN keywords.
+ * In addition to reserved symbols or keywords, /[\x00-\x20<>\\"\{\}\|\^\`]/ also needs to be taken care of for n3.
+ * In the case of ERA, a rare OP name contains "`".
  * Caution: it will only escape the first symbol matched against a regex.
  * @param bucket_base
  */
@@ -62,11 +68,16 @@ export function escape(bucket_base:string):string{
     if (invalidWINRes(bucket_base)){
         return (bucket_base.concat('%'))
     }
+
     else{
         return bucket_base.replace(WIN_SYMBOL_REGEX, encodeURIComponent)
-
     }
 }
+
+export function n3Escape(str:string):string{
+    return str.replace("`", "'").replace('"',"'" )
+}
+
 /**
  * unescape() is akin to the unescape() which is about to be deprecated.
  * @param escaped_bucket_base
@@ -118,7 +129,7 @@ export function extract_resource_from_uri(s:string){
 
 export async function writerToFile(content: any, location: string) {
     try {
-        await fp.writeFile(path.join(__dirname,location), content)
+        await fp.writeFile(location, content)
     } catch (err) {
         console.log(err)
     }
@@ -127,12 +138,14 @@ export async function writerToFile(content: any, location: string) {
 
 export function exists(path_ins:string) {
     try {
-        return fs.statSync(path.join(__dirname,path_ins)).isFile()
+        return fs.statSync(path_ins).isFile()
     }
     catch(error) {
-        throw new Error(path_ins + ' does not exist in the system ')
+        return false
     }
 }
+
+
 export const sparql_ask_query = `ASK {?s ?p ?o}`
 export async function isSPARQLEndpoint (sparql_endpoint:string, sparql_query:string){
     const queryEngine = new QueryEngine();
@@ -156,6 +169,12 @@ export function isValidURL(s:string) {
     return !!urlPattern.test(s)
 }
 
+export function createDir(dir_name:string):string{
+    if(!fs.existsSync(PATH.resolve(dir_name)))
+        fs.mkdirSync(PATH.resolve(dir_name), {recursive: true})
+    return path.resolve(dir_name)
+}
+
 export function isTreeCollection(quadString: string):boolean{
     return (quadString.match(tree_collection_regex) ===null) ? false : true
 }
@@ -165,14 +184,34 @@ export function treeCollectionID(quadString:string):string{
 }
 
 export function treeNodeID(quadString:string):string{
+    console.log(quadString)
     return tree_node_regex.exec(quadString)![1]
 }
 
 const tree_collection_regex = new RegExp("(.+)\\s{1,4}a\\s{1,4}(?:tree:|.+\\#)Collection")
-const tree_node_regex = new RegExp("(.+)\\s{1,4}tree:relation")
+const tree_node_regex = new RegExp("(.+)\\s{1,4}rdf:type")
 //https://stackoverflow.com/questions/11100821/javascript-regex-for-validating-filenames
 export const WIN_REGEX= new RegExp('^(con|prn|aux|nul|com[0-9]|lpt[0-9])$|([<>:"\\/\\\\|?*])|(\\.|\\s)$/ig')
 export const WIN_SYMBOL_REGEX = new RegExp('([<>:"\/\\|?*])|(\.|\s)$/g')
 export const WIN_RESERVE_REGEX = new RegExp('^(con|prn|aux|nul|com[0-9]|lpt[0-9])$')
 
 
+export function getValueByKeyForStringEnum(obj:Object, value: string) {
+    return Object.entries(obj).find(([key, val]) => key === value)?.[1];
+}
+
+export function createTreeRelation(relation:NamedNode|BlankNode, config:Config,store:n3.Store ){
+    const prop_path = (typeof config.propertyPath === 'string') ?
+        config.propertyPath : config.propertyPath[0]
+    const rel_bucket = [...store.getObjects(relation, SDS.terms.relationBucket, null)]
+    if (rel_bucket.length !==1){
+        console.log("ERROR: each relation instance should have one relation bucket!", relation, rel_bucket)
+    }
+    const rel_bucket_value = [...store.getObjects(relation, SDS.terms.relationValue, null)]
+    return new TreeRelation(<NamedNode|BlankNode>relation,
+            getValueByKeyForStringEnum(RelationType, config.relationType),
+            namedNode(config.bucketizerOptions.bucketBase + n3Escape(rel_bucket[0].value)),
+            <Literal[]>rel_bucket_value.map(v=>literal(n3Escape(v.value))),
+            namedNode(prop_path)
+    )
+}

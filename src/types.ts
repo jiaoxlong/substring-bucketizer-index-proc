@@ -11,6 +11,7 @@ export interface IConfig {
     _configPath:string
     _sparqlEndpoint?: string|undefined
     _sparqlQuery?: string|undefined
+    _relationType:string
     _namespace_iri: string
     _namespace_prefix?: string
     _bucketizerOptions:Partial<BucketizerCoreExtOptions>
@@ -50,6 +51,7 @@ export interface BaseNodeInterface{
 }
 export interface NodeInterface extends BaseNodeInterface {
     quads:Quad[]
+    rootRelation:TreeRelation[]
 }
 
 /**

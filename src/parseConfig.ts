@@ -3,6 +3,10 @@ import {exists, isSPARQLEndpoint, isValidURL, sparql_ask_query} from "./utils";
 import * as path from "path";
 import * as fs from "fs";
 import { readFileSync } from 'graceful-fs';
+import {NamedNode} from "@rdfjs/types";
+import {DataFactory} from "n3";
+import namedNode = DataFactory.namedNode;
+import {RelationType} from "@treecg/types";
 
 //const config = require('../config/config.json')
 
@@ -11,6 +15,7 @@ export class Config implements IConfig{
     _configPath!: string
     _bucketizerOptions!: { [p: string]: any }
     _namespace_iri!: string
+    _relationType!:string
     _path?:string
     _namespace_prefix?:string
     _prefixes?: { [p: string]: string }|undefined
@@ -26,6 +31,8 @@ export class Config implements IConfig{
             this._configPath = config_path
             //this._config = require(path.join(__dirname,config_ins))
         }
+        else
+            throw Error(config_path +" can not be found.")
     }
     async setup():Promise<Config> {
         if (this._config.sparql.sparqlEndpoint && this._config.sparql.sparqlQuery) {
@@ -34,8 +41,10 @@ export class Config implements IConfig{
             } else
                 throw new Error(`SPARQL endpoint: ${this.config.sparql.sparqlEndpoint} can not be reached!`)
 
-            if (exists(this.config.sparql.sparqlQuery)) {
-                this._sparqlQuery = fs.readFileSync(path.join(__dirname, this.config.sparql.sparqlQuery), 'utf8')
+            const sparqlPath:string = path.join(path.dirname(this._configPath), this.config.sparql.sparqlQuery)
+            if (exists(sparqlPath)) {
+                console.log()
+                this._sparqlQuery = fs.readFileSync(sparqlPath, 'utf8')
             } else
                 throw new Error('The SPARQL query returns no result!')
             if (isValidURL(this.config.namespace.namespace_iri))
@@ -47,11 +56,14 @@ export class Config implements IConfig{
                 throw new Error('propertyPath is not defined!')
             else
                 this._bucketizerOptions = this.config.bucketizer
+            if (this.config.relationType !== undefined && Object.keys(RelationType).includes(this.config.relationType))
+                this._relationType = this.config.relationType
+            else this._relationType = "Substring"
             if (exists(this.config.prefixes)) {
-                this._prefixes = this.config.prefixes
+                this._prefixes = JSON.parse(readFileSync(this.config.prefixes).toString())
             }
-            if(this.config.bucketizerOptions.propertyPath!==undefined)
-                this._propertyPath = this.config.bucketizerOptions.propertyPath
+            if(this.config.bucketizer.propertyPath!==undefined)
+                this._propertyPath = this.config.bucketizer.propertyPath
             else
                 throw new Error('propertyPath must be assigned!'  )
 
@@ -86,6 +98,11 @@ export class Config implements IConfig{
     get sparqlEndpoint():string{
         return <string>this._sparqlEndpoint
     }
+
+    get relationType():string{
+        return this._relationType
+    }
+
     get sparqlQuery():string{
         return <string>this._sparqlQuery
     }
@@ -103,6 +120,10 @@ export class Config implements IConfig{
     get bucketizerOptions(): {[p:string]: any} {
         return this._bucketizerOptions
     }
+
+    get root():NamedNode {
+        return namedNode(this.bucketizerOptions.bucketBase + this.bucketizerOptions.root)
+    }
     get prefixes():{[p:string]:string} | undefined{
         return this._prefixes
     }
@@ -114,7 +135,7 @@ export class Config implements IConfig{
     }
 }
 
-let _config: Config | undefined;
+let _config: Config;
 export function getConfig(configPath: string): Config {
     if (_config) return _config;
     _config = new Config(configPath);
