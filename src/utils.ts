@@ -203,15 +203,21 @@ export function getValueByKeyForStringEnum(obj:Object, value: string) {
 export function createTreeRelation(relation:NamedNode|BlankNode, config:Config,store:n3.Store ){
     const prop_path = (typeof config.propertyPath === 'string') ?
         config.propertyPath : config.propertyPath[0]
+    const test = [...store.getQuads(null, SDS.terms.relation, null,null)]
+    console.log(test)
     const rel_bucket = [...store.getObjects(relation, SDS.terms.relationBucket, null)]
+    console.log(rel_bucket)
     if (rel_bucket.length !==1){
         console.log("ERROR: each relation instance should have one relation bucket!", relation, rel_bucket)
     }
     const rel_bucket_value = [...store.getObjects(relation, SDS.terms.relationValue, null)]
     return new TreeRelation(<NamedNode|BlankNode>relation,
             getValueByKeyForStringEnum(RelationType, config.relationType),
-            namedNode(config.bucketizerOptions.bucketBase + n3Escape(rel_bucket[0].value)),
+            addBucketBase(config,namedNode(n3Escape(rel_bucket[0].value))),
             <Literal[]>rel_bucket_value.map(v=>literal(n3Escape(v.value))),
             namedNode(prop_path)
     )
+}
+export function addBucketBase(config:Config, nn:NamedNode){
+    return namedNode(config.bucketizerOptions.bucketBase + nn.value)
 }

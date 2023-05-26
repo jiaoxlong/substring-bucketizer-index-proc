@@ -50,8 +50,8 @@ export interface BaseNodeInterface{
     relations:TreeRelation[]
 }
 export interface NodeInterface extends BaseNodeInterface {
+    rootRelationQuads:Quad[]
     quads:Quad[]
-    rootRelation:TreeRelation[]
 }
 
 /**

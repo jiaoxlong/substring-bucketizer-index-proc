@@ -18,6 +18,7 @@ import namedNode = DataFactory.namedNode;
 import literal = DataFactory.literal;
 import blankNode = DataFactory.blankNode;
 import {
+  addBucketBase,
   createTreeRelation,
   escape,
   extract_resource_from_uri,
@@ -64,6 +65,7 @@ export class TreeBaseNode implements BaseNodeInterface, SerializationInterface{
     if (this.relations.length !== 0) {
       for (const rel of this.relations) {
         //tree:Node tree:relation tree:Relation.
+        console.log(quad(this.id, namedNode(TREE.relation), rel.id))
         quads.push(quad(this.id, namedNode(TREE.relation), rel.id))
         quads = quads.concat(rel.quads)
       }
@@ -72,17 +74,18 @@ export class TreeBaseNode implements BaseNodeInterface, SerializationInterface{
      * add member quads
      */
 
-    if (this.showTreeMember && this.members.length !== 0 )
-      for (const member of this.members){
+    if (this.showTreeMember && this.members.length !== 0 ) {
+      for (const member of this.members) {
         quads = quads.concat(member.quads)
       }
+    }
     return quads
   }
 }
 
 export class TreeNode extends TreeBaseNode implements NodeInterface{
+  rootRelationQuads: Quad[]
   quads: Quad[]
-  rootRelation: TreeRelation[];
   constructor(id: NamedNode,
               config:string,
               store:n3.Store,
@@ -90,23 +93,23 @@ export class TreeNode extends TreeBaseNode implements NodeInterface{
               showTreeMember: boolean = true) {
     super(id, config, store, isTreeMember, showTreeMember);
     this.members = this.showTreeMember ?this.addMembers():[]
-    this.rootRelation = []
+    this.rootRelationQuads = []
     this.relations = this.addRelations()
     this.quads = this.serialize()
     // todo: handle the additional quad with serialize()?
     this.quads.push(quad(this.id, RDF.terms.type, TREE.terms.Node))
-
   }
   addRelations():TreeRelation[]{
     let treeNodeRelations: TreeRelation[] = []
     if(this.store.size!==0) {
-      // check if root relation presents in the store
+      //check if root relation presents in the store
+
       const rootRel = [...this.store.getQuads(null, SDS.terms.custom("isRoot"), null, null)]
       if (rootRel.length!==0){
         for (const rel of rootRel) {
-          const rels = [...this.store.getObjects(rel.subject, SDS.terms.relation, null)]
+          const rels = [...this.store.getQuads(rel.subject, SDS.terms.relation, null,null)]
           for (const r of rels) {
-            this.rootRelation.push(createTreeRelation(<NamedNode|BlankNode>r, this.config, this.store))
+            this.rootRelationQuads.push(quad(addBucketBase(this.config, <NamedNode>r.subject), TREE.terms.relation, r.object))
           }
         }
       }
@@ -172,8 +175,8 @@ export class TreeCollection extends TreeBaseNode implements CollectionInterface{
     // adding shape
 
     if (this.shape !== undefined) {
-      const tree_shape_blank = blankNode()
-      md_quads.push(quad(this.id, namedNode(TREE.shape), tree_shape_blank))
+
+      md_quads.push(quad(this.id, namedNode(TREE.shape), this.shape.shape))
       md_quads = [...md_quads, ...this.shape.quads]
     }
     return md_quads
@@ -243,6 +246,7 @@ export class TreeRelation implements RelationInterface, SerializationInterface {
     else
       rel_quads.push(quad(this.id, namedNode(TREE.value), <Literal>this.value))
     //tree:Relation tree:node tree:Node.
+    console.log(quad(this.id, namedNode(TREE.node), this.relation_node))
     rel_quads.push(quad(this.id, namedNode(TREE.node), this.relation_node))
     //tree:Relation tree:remainingItems Literal.
     if (this.remainingItems)
