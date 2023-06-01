@@ -13,6 +13,5 @@
     "pageSize": "50"
   },
   "prefixes": "./config/prefix.json",
-  "relationType": "Substring",
-  "path": "."
+  "relationType": "Substring"
 }

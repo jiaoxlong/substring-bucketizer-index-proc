@@ -1,11 +1,11 @@
 import * as n3 from "n3"
-import {BlankNode, DataFactory, Literal, NamedNode, Term} from "n3";
+import {BlankNode, DataFactory, Literal, Quad, NamedNode} from "n3";
+
 import {BucketizerCoreExtOptions, BucketizerCoreOptions, RDF, RDFS, SDS, SHACL, TREE} from '@treecg/types';
 import namedNode = DataFactory.namedNode;
 
 import * as path from "path";
 import { Transform, TransformCallback, TransformOptions } from 'stream'
-
 import * as fs from 'fs';
 import * as fp from 'fs/promises'
 import {QueryEngine} from "@comunica/query-sparql";
@@ -14,6 +14,15 @@ import PATH from "path";
 import {Config, getConfig} from "./parseConfig";
 import {RelationType} from "./types";
 import literal = DataFactory.literal;
+
+import blankNode = DataFactory.blankNode;
+import quad = DataFactory.quad;
+
+
+const lockfile = require("proper-lockfile");
+const bluebirdPromise = require("bluebird");
+const fse= require("fs-extra");
+
 /**
  * counts the number of remaining items adheres to a substring relation
  * @param store an N3.Store instance
@@ -93,18 +102,23 @@ export function unescape(escaped_bucket_base:string):string{
  * @returns resource substring index
  */
 export function get_resource_index(s:string){
-    let s_index:number;
     if (s.includes('http')) {
-        let s_index: number;
         if (s.includes('#'))
-            s_index = s.lastIndexOf('#');
+            return s.lastIndexOf('#')+1
+        else if (s.includes('/')){
+            if (s.endsWith('/')){
+                return s.slice(0, -1).lastIndexOf('/')+1
+
+            }
+            else{
+                return s.lastIndexOf('/')+1;
+            }
+        }
         else
-            s_index = s.lastIndexOf('/');
-        return s_index+1;
+            throw new Error(`Unexpected IRI: ${s}`)
     }
     else if (s.includes(':')) {
-        s_index = s.indexOf(':');
-        return s_index+1;
+        return s.indexOf(':')+1;
     }
     else
         return 0;
@@ -126,7 +140,6 @@ export function extract_resource_from_uri(s:string){
         return s
 }
 
-
 export async function writerToFile(content: any, location: string) {
     try {
         await fp.writeFile(location, content)
@@ -134,7 +147,6 @@ export async function writerToFile(content: any, location: string) {
         console.log(err)
     }
 }
-
 
 export function exists(path_ins:string) {
     try {
@@ -184,7 +196,7 @@ export function treeCollectionID(quadString:string):string{
 }
 
 export function treeNodeID(quadString:string):string{
-    console.log(quadString)
+    //console.log(quadString)
     return tree_node_regex.exec(quadString)![1]
 }
 
@@ -204,9 +216,9 @@ export function createTreeRelation(relation:NamedNode|BlankNode, config:Config,s
     const prop_path = (typeof config.propertyPath === 'string') ?
         config.propertyPath : config.propertyPath[0]
     const test = [...store.getQuads(null, SDS.terms.relation, null,null)]
-    console.log(test)
+    //console.log(test)
     const rel_bucket = [...store.getObjects(relation, SDS.terms.relationBucket, null)]
-    console.log(rel_bucket)
+    //console.log(rel_bucket)
     if (rel_bucket.length !==1){
         console.log("ERROR: each relation instance should have one relation bucket!", relation, rel_bucket)
     }
@@ -218,6 +230,232 @@ export function createTreeRelation(relation:NamedNode|BlankNode, config:Config,s
             namedNode(prop_path)
     )
 }
-export function addBucketBase(config:Config, nn:NamedNode){
+export function addBucketBase(config:Config, nn:NamedNode|Literal){
     return namedNode(config.bucketizerOptions.bucketBase + nn.value)
+}
+
+//  [SDS.Relation]: Tree.Relation
+//  [SDS.Bucket]: TREE.Node
+export const SDSToTree:{[key:string]:string} = {
+    [SDS.relation]: TREE.relation,
+    [SDS.relationBucket]: TREE.node,
+    [SDS.relationPath]: TREE.path,
+    [SDS.relationValue]: TREE.value,
+    [SDS.relationType]: RDF.type,
+}
+
+export function replPredicate(q: Quad, mapping:{[key:string]:string}){
+    return q.predicate.value in mapping ? quad(q.subject, namedNode(mapping[q.predicate.value]), q.object) : q
+}
+
+//subject
+// appear only on root bucket
+const subj_conditions = [SDS.terms.custom("isRoot").value, TREE.terms.relation.value]
+
+//object
+// sds:Relation sds:relationBucket ?sds:Bucket .
+// sds:Recode sds:bucket ?sds:Bucket .
+const obj_conditions = [TREE.terms.node.value, SDS.terms.bucket.value]
+
+
+
+export function addPrefix(config:Config, q:Quad){
+    if (subj_conditions.includes(q.predicate.value)){
+        return quad(addBucketBase(config, <NamedNode>q.subject), q.predicate, q.object)
+    }
+    else if (obj_conditions.includes(q.predicate.value)){
+        return quad(q.subject, q.predicate, addBucketBase(config, <NamedNode>q.object))
+    }
+    else
+        return q
+}
+
+export function addExtra(config:Config, q:Quad):Quad[]{
+    let store = new n3.Store()
+    let quads:Quad[] = []
+    if (subj_conditions.includes(q.predicate.value))
+        quads.push(quad(q.subject, RDF.terms.type, TREE.terms.Node))
+    if (obj_conditions.includes(q.predicate.value))
+        quads.push(quad(<NamedNode>q.object, RDF.terms.type, TREE.terms.Node))
+
+    if(q.predicate.equals(TREE.terms.relation))
+        if (typeof config.propertyPath === 'string')
+            quads.push(quad(<BlankNode>q.object, TREE.terms.path, namedNode(config.propertyPath)))
+        else if (config.propertyPath instanceof Array)
+            for (const prop_path of config.propertyPath) {
+                quads.push(quad(<BlankNode>q.object, TREE.terms.path, namedNode(prop_path)))
+        }
+    return [...new Set(quads)]
+}
+
+
+export function n3_escape(q:Quad|undefined){
+    /** Quad[] may be populated with n3.Quad or other Quad inherited from rdfjs.Quad
+     *  Thus, it is safe to set the condition to check if Term.termType === 'x' instead of using instanceof
+     *
+     *  Explanation:
+     *
+     *  The first one's structure is
+     *  Quad {
+     *     id: '',
+     *     _subject: BlankNode { id: '_:b27501_n3-13749' },
+     *     _predicate: NamedNode { id: 'https://w3id.org/sds#stream' },
+     *     _object: NamedNode { id: 'https://w3id.org/sds#Stream' },
+     *     _graph: DefaultGraph { id: '' }
+     *   }
+     *   Whereas the latter one's structure is
+     *    Quad {
+     *     termType: 'Quad',
+     *     value: '',
+     *     subject: BlankNode { termType: 'BlankNode', value: 'df_67_15097' },
+     *     predicate: NamedNode {
+     *       termType: 'NamedNode',
+     *       value: 'https://w3id.org/sds#relationBucket'
+     *     },
+     *     object: NamedNode { termType: 'NamedNode', value: 'l`' },
+     *     graph: DefaultGraph { termType: 'DefaultGraph', value: '' }
+     *   }
+     *
+     */
+
+    if (q !== undefined) {
+        if (q.subject.termType === 'NamedNode') {
+            if (q.object.termType === 'Literal') {
+                return quad(namedNode(n3Escape(q.subject.value)), q.predicate, literal(n3Escape(q.object.value)))
+            }
+            else if (q.object.termType === 'NamedNode') {
+                return quad(namedNode(n3Escape(q.subject.value)), q.predicate, namedNode(n3Escape(q.object.value)))
+            }
+            else if (q.object.termType === 'BlankNode') {
+                return quad(namedNode(n3Escape(q.subject.value)), q.predicate, q.object)
+            }
+            else{
+                return q
+            }
+        }
+
+        else if (q.subject.termType === 'BlankNode') {
+            if (q.object.termType === 'Literal') {
+                return quad(q.subject, q.predicate, literal(n3Escape(q.object.value)))
+            }
+            else if (q.object.termType === 'NamedNode') {
+                return quad(q.subject, q.predicate, namedNode(n3Escape(q.object.value)))
+            }
+            else {
+                return q
+            }
+        }
+        else {
+            return q
+        }
+    }
+    else{
+        throw new Error("Undefined Quad!")
+    }
+}
+
+export function ensure<T>(argument: T | undefined | null, message:string='saftgaurd type'){
+    if (argument === undefined || argument === null){
+        throw new TypeError(message)
+    }
+    return argument
+}
+
+function getMemberIDs(config:Config, quads:Quad[]):string[]{
+    /** Note that array map() also brings the prior filter condition(s) to the return value*/
+    if (typeof config.propertyPath === 'string'){
+        return quads.filter(ids => ids.predicate.equals(namedNode(<string>config.propertyPath))).map(ids=><string>ids.subject.value)
+    }
+    else{
+        return [...new Set(quads.filter(ids=>config.propertyPath.includes(ids.predicate.value))
+            .map(ids=><string>ids.subject.value))]
+    }
+
+}
+
+export function getMemberQuads(config:Config, quads:Quad[]):Quad[]{
+    const member_ids = getMemberIDs(config, quads)
+    return quads.filter(q=>member_ids.includes(q.subject.value))
+}
+
+function getRelationBNs(config:Config, quads:Quad[]):string[]{
+    return [...new Set(quads.filter(q => q.predicate.equals(TREE.terms.relation)).map(q=><string>q.object.value))]
+}
+
+function getNodeRelQuad(config:Config, quads:Quad[]):Quad[]{
+    return quads.filter(q=>q.predicate.equals(TREE.terms.relation))
+}
+
+export function getRelationQuads(config:Config, quads:Quad[], nodes:NamedNode[], counter:{[key:string]: any}):Quad[]{
+    /** update counter */
+    const parent_node = getNodeRelQuad(config, quads).map(q=><string>q.subject.value)[0]
+    // structure: {"node":{"sub_node":count,... }}
+    for (const n of nodes){
+        if (parent_node in counter){
+            if (n.value in counter[parent_node])
+                counter[parent_node][n.value] += 1
+            else
+                counter[parent_node][n.value] = 1
+        }
+        else{
+            let sub_dic: {[key:string]: number}= {}
+            sub_dic[n.value] = 1
+            counter[parent_node]=sub_dic
+        }
+    }
+    // tree:Relation rdf:type tree:SubstringRelation;
+    //  tree:node tree:Node;
+    //  tree:path <IRI>;
+    //  tree:value xsd:string;
+    const rel_bns = getRelationBNs(config, quads)
+
+    // tree:Node tree:relation tree:Relation.
+    const node_rel_quad = getNodeRelQuad(config, quads)
+    return [...new Set([...quads.filter(q => rel_bns.includes(<string>q.subject.value)), ...node_rel_quad])]
+}
+
+export function safeAppendFile(out:string, quadString:string){
+    const retryOptions = {
+        retries: {
+            retries: 5,
+            factor: 3,
+            minTimeout: 1 * 1000,
+            maxTimeout: 60 * 1000,
+            randomize: true,
+        }
+    };
+    let cleanup: () => any;
+    bluebirdPromise.try(() => {
+        return fse.ensureFile(out); // fs-extra creates file if needed
+    }).then(() => {
+        return lockfile.lock(out, retryOptions);
+    }).then((release: () => any) => {
+        cleanup = release;
+        let stream = fs.createWriteStream(out, {flags: 'a'});
+        stream.write(quadString);
+        stream.end();
+
+        return new Promise<void>(function (resolve, reject) {
+            stream.on('finish', () => resolve());
+            stream.on('error', (err) => reject(err));
+        });
+    }).then(() => {
+        console.log('Finished!');
+    }).catch((err: any) => {
+        console.error(err);
+    }).finally(() => {
+        cleanup && cleanup();
+    });
+}
+
+export function serialize_quads(quads: Quad[]): string {
+    return new n3.Writer().quadsToString(quads);
+}
+
+/**
+ * delay() introduce a promise-based delay
+ * @param ms millisecond
+ */
+export function delay(ms:number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }

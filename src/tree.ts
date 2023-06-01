@@ -163,7 +163,7 @@ export class TreeCollection extends TreeBaseNode implements CollectionInterface{
     let md_quads: Quad[] = []
     /** TREE metadata */
     // Resource rdf:type tree:Collection.
-    md_quads.push(quad(this.id, namedNode(RDF.type), namedNode(TREE.Collection)))
+    md_quads.push(quad(this.id, RDF.terms.type, TREE.terms.Collection))
     // adding resources
     if (this.resource instanceof Array) {
       for (const r of this.resource) {

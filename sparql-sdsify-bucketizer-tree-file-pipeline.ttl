@@ -65,27 +65,19 @@
 
 
 [] a js:JsChannel;
-  :reader <tree/node-reader-js>;
-  :writer <tree/node-writer-js>.
+  :reader <tree/member-reader-js>;
+  :writer <tree/member-writer-js>.
 
-<tree/node-reader-js> a :JsReaderChannel.
-<tree/node-writer-js> a :JsWriterChannel.
-
-[] a js:JsChannel;
-  :reader <tree/collection-reader-js>;
-  :writer <tree/collection-writer-js>.
-
-<tree/collection-reader-js> a :JsReaderChannel.
-<tree/collection-writer-js> a :JsWriterChannel.
+<tree/member-reader-js> a :JsReaderChannel.
+<tree/member-writer-js> a :JsWriterChannel.
 
 [] a js:SDSToTREE;
   js:configPath <./config/config.json>;
   js:bucketizerStream <sds/reader-js-buckets>;
-  js:treeNodeOutputStream <tree/node-writer-js>;
-  js:treeCollectionOutputStream <tree/collection-writer-js>.
+  js:treeMemberOutputStream <tree/member-writer-js>.
 
 [] a js:Ingest;
   js:configPath <./config/config.json>;
-  js:treeNodeInputStream <tree/node-reader-js>;
-  js:treeCollectionInputStream <tree/collection-reader-js>.
+  js:treeMemberInputStream <tree/member-reader-js>.
+
 

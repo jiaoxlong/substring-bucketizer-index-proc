@@ -55,9 +55,13 @@
     "@treecg/ldes-substring-bucketizer": "^0.0.8-alpha.0",
     "@treecg/substring-bucketizer": "^2.1.6",
     "@treecg/types": "^0.4.5",
+    "bluebird": "^3.7.2",
+    "fs-ext": "^2.0.0",
+    "fs-extra": "^11.1.1",
     "jest": "^29.4.1",
     "n3": "^1.16.2",
     "npm": "^9.4.1",
+    "proper-lockfile": "^4.1.2",
     "ts-jest": "^29.0.5",
     "ts-node": "^10.9.1"
   },
