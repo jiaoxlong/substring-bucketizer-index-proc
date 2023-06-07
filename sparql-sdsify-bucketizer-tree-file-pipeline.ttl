@@ -6,7 +6,7 @@
 @prefix rml: <https://w3id.org/conn/rml#> .
 @prefix ql: <http://semweb.mmlab.be/ns/ql#> .
 
-<> owl:imports <../sds-processors/sdsify.ttl>.
+<> owl:imports <steps/sdsify.ttl>.
 <> owl:imports <steps/2_bucketstep.ttl>.
 <> owl:imports <steps/querySparql.ttl>.
 <> owl:imports <steps/sds_to_tree.ttl>.
@@ -74,6 +74,7 @@
 [] a js:SDSToTREE;
   js:configPath <./config/config.json>;
   js:bucketizerStream <sds/reader-js-buckets>;
+  js:bucketizerMetaStream <metadata/reader-2>;
   js:treeMemberOutputStream <tree/member-writer-js>.
 
 [] a js:Ingest;

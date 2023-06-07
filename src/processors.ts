@@ -4,28 +4,22 @@ import * as n3 from "n3";
 import {RDF, SDS, TREE} from "@treecg/types";
 import {DataFactory, Quad, Literal, NamedNode} from "n3";
 import namedNode = DataFactory.namedNode;
-import {TreeCollection, TreeNode} from "./tree";
+import {TreeCollection} from "./tree";
 import { Stream, Writer } from "@treecg/connector-types";
 import PATH from "path";
 import {
-    addBucketBase, addExtra, addPrefix,
+    addExtra, addPrefix,
     createDir, ensure,
     escape,
     exists,
     extract_resource_from_uri, getMemberQuads, getRelationQuads,
-    isTreeCollection, n3_escape, n3Escape, replPredicate, SDSToTree, serialize_quads,
-    treeCollectionID,
-    treeNodeID
+    n3_escape, replPredicate, SDSToTree, serialize_quads,
+
 } from "./utils";
 import * as fs from "fs/promises";
 
-import quad = DataFactory.quad;
-import literal = DataFactory.literal;
 
 const queryEngine = new QueryEngine();
-
-
-
 
 /**
  * The query_sparql processor fetches query result from a SPRAQL endpoint
@@ -43,21 +37,30 @@ async function doQuery(config: Config, writer: Writer<string>){
     const quadStream = await queryEngine.queryQuads(config.sparqlQuery, { sources: [config.sparqlEndpoint] });
     const quads = await quadStream.toArray()
     await writer.push(serialize_quads(quads.map(q => <Quad>q)));
+    await writer.disconnect()
 }
 
 /**
  * The sds_to_tree processor transforms SDS bucktized data, streamed from a prior bucketization process into TREE data
  * @param configPath PATH to a config file. For example, ./config.json
  * @param reader Readable stream
+ * @param meta_reader Readable stream
  * @param treeMemberOutputStream Writeable stream
  */
 export async function sds_to_tree(configPath:string,
                             reader:Stream<Quad[]>,
+                            meta_reader:Stream<Quad[]>,
                             treeMemberOutputStream:Writer<string>) {
 
     const config = getConfig(configPath)
-    // todo: why ???
-    //await treeMemberOutputStream.push(serialize_quads(quads))
+    meta_reader
+        .on('data', async quad =>{
+            console.log(quad)
+        })
+        .on('end', ()=>{
+            console.log("All meta_read have been read.")
+            meta_reader.disconnect()
+        })
     reader
         .on('data', async quads => {
             /** escape n3js issued symbols /[\x00-\x20<>\\"\{\}\|\^\`]/ */
@@ -74,6 +77,11 @@ export async function sds_to_tree(configPath:string,
             }
             await treeMemberOutputStream.push(serialize_quads(tree_quads))
         })
+    reader.on('end',()=>{
+        reader.disconnect()
+        console.log('All sds_tree reader data have been read.')
+    })
+    await treeMemberOutputStream.disconnect()
 }
 
 /**+
@@ -125,8 +133,10 @@ export async function ingest(configPath: string, treeMemberInputStream: Stream<s
         })
         .on('end',()=>{
             console.log(counter)
+            treeMemberInputStream.disconnect()
             }
         )
+
 }
 
 

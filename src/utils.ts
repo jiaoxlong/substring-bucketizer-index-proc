@@ -1,20 +1,18 @@
 import * as n3 from "n3"
 import {BlankNode, DataFactory, Literal, Quad, NamedNode} from "n3";
 
-import {BucketizerCoreExtOptions, BucketizerCoreOptions, RDF, RDFS, SDS, SHACL, TREE} from '@treecg/types';
+import { RDF, SDS, TREE} from '@treecg/types';
 import namedNode = DataFactory.namedNode;
 
 import * as path from "path";
-import { Transform, TransformCallback, TransformOptions } from 'stream'
 import * as fs from 'fs';
 import * as fp from 'fs/promises'
 import {QueryEngine} from "@comunica/query-sparql";
-import {TreeCollection, TreeRelation} from "./tree";
+import {TreeRelation} from "./tree";
 import PATH from "path";
 import {Config, getConfig} from "./parseConfig";
 import {RelationType} from "./types";
 import literal = DataFactory.literal;
-
 import blankNode = DataFactory.blankNode;
 import quad = DataFactory.quad;
 
@@ -376,6 +374,7 @@ function getMemberIDs(config:Config, quads:Quad[]):string[]{
 export function getMemberQuads(config:Config, quads:Quad[]):Quad[]{
     const member_ids = getMemberIDs(config, quads)
     return quads.filter(q=>member_ids.includes(q.subject.value))
+    //return quads.filter(q => member_ids.some(x => x.equals(q)))
 }
 
 function getRelationBNs(config:Config, quads:Quad[]):string[]{

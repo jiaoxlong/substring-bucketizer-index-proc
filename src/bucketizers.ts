@@ -79,17 +79,24 @@ export async function doTheBucketization(
     (x, y) => addProcess(x, y, quadMemberId, quads)
   );
   sr.metadata.data(
-    quads => sw.metadata.push(f(parseQuads(quads)))
+    quads => {
+      sw.metadata.push(f(parseQuads(quads)))
+
+    }
   );
 
   if (sr.metadata.lastElement) {
-    sw.metadata.push(f(parseQuads(sr.metadata.lastElement)));
+    await sw.metadata.push(f(parseQuads(sr.metadata.lastElement)));
   }
-
   const state = await readState(savePath);
 
   const bucketizer = FACTORY.buildLD(quads, quadMemberId, state);
 
+  sr.metadata
+      .on('end', async()=>{
+        await sr.metadata.disconnect()
+        console.log("All sr.metadata have been read.")
+      })
   if (state)
     bucketizer.importState(state);
 
@@ -120,5 +127,12 @@ export async function doTheBucketization(
     t.push(quad(recordId, RDF.terms.type, SDS.terms.Member));
     await sw.data.push(t);
   });
+  sr.data
+      .on('end', async ()=>{
+        await sr.data.disconnect()
+        console.log("All sr.data have been read.")
+      })
+  await sw.metadata.disconnect()
+  await sw.data.disconnect()
 }
 

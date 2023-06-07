@@ -27,10 +27,14 @@ js:SDSToTREE a js:JsProcess;
       a fnom:PositionParameterMapping ;
       fnom:functionParameter js:bucketizerStream ;
       fnom:implementationParameterPosition "1"^^xsd:int
-    ],[
+    ], [
+      a fnom:PositionParameterMapping ;
+      fnom:functionParameter js:bucketizerMetaStream ;
+      fnom:implementationParameterPosition "2"^^xsd:int
+    ], [
     a fnom:PositionParameterMapping ;
     fnom:functionParameter js:treeMemberOutputStream ;
-    fnom:implementationParameterPosition "2"^^xsd:int
+    fnom:implementationParameterPosition "3"^^xsd:int
     ]
   ].
 
@@ -44,6 +48,10 @@ js:SDSToTREE a js:JsProcess;
     sh:class :ReaderChannel;
     sh:path js:bucketizerStream;
     sh:name "Bucketizer stream input channel";
+  ],[
+    sh:class :ReaderChannel;
+    sh:path js:bucketizerMetaStream;
+    sh:name "Bucketizer metadata stream input channel";
   ],[
     sh:class :WriterChannel;
     sh:path js:treeMemberOutputStream;
