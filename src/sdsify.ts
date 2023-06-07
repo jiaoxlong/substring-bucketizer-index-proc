@@ -48,7 +48,7 @@ function extractMember(store: Store, subject: string): RDF.Quad[] {
   return subGraph;
 }
 
-export async function sdsify(input: Stream<string | RDF.Quad[]>, output: Writer<string>, stream: string, type?: string) {
+export function sdsify(input: Stream<string | RDF.Quad[]>, output: Writer<string>, stream: string, type?: string) {
   const streamNode = namedNode(stream);
 
   input.data(async input => {
@@ -86,32 +86,24 @@ export async function sdsify(input: Stream<string | RDF.Quad[]>, output: Writer<
       }
       const blank = blankNode();
       quads.push(
-        DataFactory.quad(
-          blank,
-          SDS.terms.payload,
-          namedNode(key),
-        ),
-        DataFactory.quad(
-          blank,
-          SDS.terms.stream,
-          streamNode,
-        ),
+          DataFactory.quad(
+              blank,
+              SDS.terms.payload,
+              namedNode(key),
+          ),
+          DataFactory.quad(
+              blank,
+              SDS.terms.stream,
+              streamNode,
+          ),
       );
 
       const str = new NWriter().quadsToString(quads);
       await output.push(str);
       membersCount += 1;
-
     }
+
     console.log("sdsify: pushed ", membersCount, "members");
-
   });
-  input
-      .on("end", async ()=> {
-        console.log("All sdsify input have been read.")
-        await input.disconnect()
-
-      })
-
-  await output.disconnect()
+  input.on("end", () => output.disconnect());
 }

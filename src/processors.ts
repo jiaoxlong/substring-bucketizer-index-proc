@@ -37,6 +37,7 @@ async function doQuery(config: Config, writer: Writer<string>){
     const quadStream = await queryEngine.queryQuads(config.sparqlQuery, { sources: [config.sparqlEndpoint] });
     const quads = await quadStream.toArray()
     await writer.push(serialize_quads(quads.map(q => <Quad>q)));
+    await quadStream.close()
     await writer.disconnect()
 }
 
@@ -55,11 +56,9 @@ export async function sds_to_tree(configPath:string,
     const config = getConfig(configPath)
     meta_reader
         .on('data', async quad =>{
-            console.log(quad)
         })
         .on('end', ()=>{
             console.log("All meta_read have been read.")
-            meta_reader.disconnect()
         })
     reader
         .on('data', async quads => {
@@ -78,10 +77,9 @@ export async function sds_to_tree(configPath:string,
             await treeMemberOutputStream.push(serialize_quads(tree_quads))
         })
     reader.on('end',()=>{
-        reader.disconnect()
-        console.log('All sds_tree reader data have been read.')
+        treeMemberOutputStream.disconnect()
     })
-    await treeMemberOutputStream.disconnect()
+
 }
 
 /**+
@@ -133,7 +131,6 @@ export async function ingest(configPath: string, treeMemberInputStream: Stream<s
         })
         .on('end',()=>{
             console.log(counter)
-            treeMemberInputStream.disconnect()
             }
         )
 

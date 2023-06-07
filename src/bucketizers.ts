@@ -7,7 +7,6 @@ import { literal, NBNode, SR, SW, transformMetadata } from "./core";
 import { Cleanup } from './exitHandler';
 import { LDES, PPLAN, PROV, RDF, SDS } from "@treecg/types";
 import { Stream, Writer } from "@treecg/connector-types";
-import * as n3 from "n3";
 
 type Data = { "data": Quad[], "metadata": Quad[] };
 const { namedNode, quad } = DataFactory;
@@ -46,21 +45,24 @@ function addProcess(id: NBNode | undefined, store: Store, strategyId: NBNode, bu
   return newId;
 }
 function parseQuads(quads: string): Quad[] {
-  console.log("Parsing quads!");
+  //console.log("Parsing quads!");
   const parser = new N3.Parser();
   return parser.parse(quads);
 }
 
 export async function doTheBucketization(
-  dataReader: Stream<Quad[]>,
-  metadataReader: Stream<string>,
-  dataWriter: Writer<Quad[]>,
-  metadataWriter: Writer<Quad[]>,
-  location: string,
-  savePath: string,
-  sourceStream: string | undefined,
-  resultingStream: string
+    dataReader: Stream<Quad[]>,
+    metadataReader: Stream<string>,
+    dataWriter: Writer<Quad[]>,
+    metadataWriter: Writer<Quad[]>,
+    location: string,
+    savePath: string,
+    sourceStream: string | undefined,
+    resultingStream: string
 ) {
+  dataReader.on("end", () => dataWriter.disconnect());
+  metadataReader.on("end", () => metadataWriter.disconnect());
+
   const sr = { metadata: metadataReader, data: dataReader };
   const sw = { metadata: metadataWriter, data: dataWriter };
 
@@ -68,35 +70,31 @@ export async function doTheBucketization(
   const quads = new Parser().parse(content);
 
   const quadMemberId = <NBNode>quads.find(quad =>
-    quad.predicate.equals(RDF.terms.type) && quad.object.equals(LDES.terms.BucketizeStrategy)
+      quad.predicate.equals(RDF.terms.type) && quad.object.equals(LDES.terms.BucketizeStrategy)
   )!.subject;
-  console.log("Do bucketization", quadMemberId);
+  //console.log("Do bucketization", quadMemberId);
 
   const f = transformMetadata(
-    namedNode(resultingStream),
-    sourceStream ? namedNode(sourceStream) : undefined,
-    "sds:Member",
-    (x, y) => addProcess(x, y, quadMemberId, quads)
+      namedNode(resultingStream),
+      sourceStream ? namedNode(sourceStream) : undefined,
+      "sds:Member",
+      (x, y) => addProcess(x, y, quadMemberId, quads)
   );
   sr.metadata.data(
-    quads => {
-      sw.metadata.push(f(parseQuads(quads)))
-
-    }
+      quads => sw.metadata.push(f(parseQuads(quads)))
   );
 
   if (sr.metadata.lastElement) {
-    await sw.metadata.push(f(parseQuads(sr.metadata.lastElement)));
+    sw.metadata.push(f(parseQuads(sr.metadata.lastElement)));
   }
+  sr.metadata.on('end', ()=>{
+    sw.metadata.disconnect()
+  })
+
   const state = await readState(savePath);
 
   const bucketizer = FACTORY.buildLD(quads, quadMemberId, state);
 
-  sr.metadata
-      .on('end', async()=>{
-        await sr.metadata.disconnect()
-        console.log("All sr.metadata have been read.")
-      })
   if (state)
     bucketizer.importState(state);
 
@@ -104,13 +102,15 @@ export async function doTheBucketization(
   //     const state = bucketizer.exportState()
   //     await writeState(savePath, state);
   // })
+
   sr.data.data(async (data: Quad[] | string) => {
     const t = new Parser().parse(<string>data);
+    //console.log("Bucketizing member")
     if (!t.length) return;
 
     const members = [...new Set(t.filter(q => q.predicate.equals(SDS.terms.custom("payload"))).map(q => q.object))];
     if (members.length > 1) {
-      console.error("Detected more members ids than expected");
+      //console.error("Detected more members ids than expected");
     }
 
     if (members.length === 0) return;
@@ -125,14 +125,11 @@ export async function doTheBucketization(
     t.push(...<Quad[]>extras);
     t.push(quad(recordId, SDS.terms.stream, namedNode(resultingStream)));
     t.push(quad(recordId, RDF.terms.type, SDS.terms.Member));
+
+    //console.log("Pushing thing bucketized!")
     await sw.data.push(t);
   });
-  sr.data
-      .on('end', async ()=>{
-        await sr.data.disconnect()
-        console.log("All sr.data have been read.")
-      })
-  await sw.metadata.disconnect()
-  await sw.data.disconnect()
+  sr.data.on('end', ()=> {
+    sw.data.disconnect()
+  })
 }
-
