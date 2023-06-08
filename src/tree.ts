@@ -20,7 +20,7 @@ import blankNode = DataFactory.blankNode;
 import {
   addBucketBase,
   createTreeRelation,
-  escape,
+  winEscape,
   extract_resource_from_uri,
   getValueByKeyForStringEnum, n3Escape,
   remainingItemsCount

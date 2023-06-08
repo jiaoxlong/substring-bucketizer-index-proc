@@ -6,9 +6,9 @@
 @prefix rml: <https://w3id.org/conn/rml#> .
 @prefix ql: <http://semweb.mmlab.be/ns/ql#> .
 
-<> owl:imports <steps/sdsify.ttl>.
-<> owl:imports <steps/2_bucketstep.ttl>.
 <> owl:imports <steps/querySparql.ttl>.
+<> owl:imports <../sds-processors/sdsify.ttl>.
+<> owl:imports <../sds-processors/2_bucketstep.ttl>.
 <> owl:imports <steps/sds_to_tree.ttl>.
 <> owl:imports <steps/ingest.ttl>.
 

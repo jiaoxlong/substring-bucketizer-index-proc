@@ -39,6 +39,11 @@ export function remainingItemsCount(store:n3.Store, relation:BlankNode|NamedNode
     return count
 }
 
+//https://stackoverflow.com/questions/11100821/javascript-regex-for-validating-filenames
+export const WIN_REGEX= new RegExp('^(con|prn|aux|nul|com[0-9]|lpt[0-9])$|([<>:"\\/\\\\|?*])|(\\.|\\s)$/ig')
+export const WIN_SYMBOL_REGEX = new RegExp('([<>:"\/\\|?*])|(\.|\s)$/g')
+export const WIN_RESERVE_REGEX = new RegExp('^(con|prn|aux|nul|com[0-9]|lpt[0-9])$')
+
 /**
  * validates a bucketbase if it contains any symbols or is named using a keyword reserved by Windows for naming files
  * @param bucket_base
@@ -71,7 +76,7 @@ export function invalidWINSYM(bucket_base:string):boolean{
  * Caution: it will only escape the first symbol matched against a regex.
  * @param bucket_base
  */
-export function escape(bucket_base:string):string{
+export function winEscape(bucket_base:string):string{
     if (invalidWINRes(bucket_base)){
         return (bucket_base.concat('%'))
     }
@@ -200,10 +205,7 @@ export function treeNodeID(quadString:string):string{
 
 const tree_collection_regex = new RegExp("(.+)\\s{1,4}a\\s{1,4}(?:tree:|.+\\#)Collection")
 const tree_node_regex = new RegExp("(.+)\\s{1,4}rdf:type")
-//https://stackoverflow.com/questions/11100821/javascript-regex-for-validating-filenames
-export const WIN_REGEX= new RegExp('^(con|prn|aux|nul|com[0-9]|lpt[0-9])$|([<>:"\\/\\\\|?*])|(\\.|\\s)$/ig')
-export const WIN_SYMBOL_REGEX = new RegExp('([<>:"\/\\|?*])|(\.|\s)$/g')
-export const WIN_RESERVE_REGEX = new RegExp('^(con|prn|aux|nul|com[0-9]|lpt[0-9])$')
+
 
 
 export function getValueByKeyForStringEnum(obj:Object, value: string) {

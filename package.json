@@ -1,13 +1,16 @@
 {
   "name": "substring-bucketizer-index-proc",
   "version": "0.0.1",
-  "description": "a process adheres to connector architecture to query a SPARQL endpoint, create bucketized quads and serialize a substring bucketizer index",
+  "description": "a process adheres to connector architecture to query a SPARQL endpoint, create bucketized quads and serialize/materialize a substring bucketizer index",
   "main": "index.js",
   "scripts": {
     "build": "tsc",
     "test": "jest",
     "watch-test": "jest --watch"
   },
+  "files":  [
+    "./lib/src/*.js"
+  ],
   "jest": {
     "transform": {
       "transform_regex": [
@@ -39,7 +42,7 @@
     "substring bucketizer",
     "substring bucketizer index"
   ],
-  "author": "Jiao Long",
+  "author": "Jiao Long <jiao.long@ugent.be>",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/jiaoxlong/substring-bucketizer-index-proc/issues"
@@ -49,8 +52,8 @@
     "@comunica/query-sparql": "^2.4.3",
     "@rdfjs/dataset": "^2.0.1",
     "@rdfjs/types": "^1.1.0",
-    "@treecg/bucketizer-core": "^1.1.7",
-    "@treecg/bucketizers": "^2.1.9",
+    "@treecg/bucketizer-core": "^1.1.8",
+    "@treecg/bucketizers": "^2.1.10",
     "@treecg/connector-types": "1.1.5",
     "@treecg/ldes-substring-bucketizer": "^0.0.8-alpha.0",
     "@treecg/substring-bucketizer": "^2.1.6",
