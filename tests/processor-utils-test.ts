@@ -17,6 +17,9 @@ describe('validate bucket/node to be used for naming files', ()=> {
     });
 })
 
-// describe('escape a symbol with its unicode character when illegal symbols were found', ()=>{
-//     test()
+// describe('vadliate remainingItemsCount', ()=>{
+//      test('remaining items count over an instance of a n3.Store', ()=>{
+//
+//
+//      })
 // })

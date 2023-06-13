@@ -23,7 +23,7 @@ import {
   winEscape,
   extract_resource_from_uri,
   getValueByKeyForStringEnum, n3Escape,
-  remainingItemsCount
+  remainingItemsCountStore
 } from "./utils";
 import {Config, getConfig} from "./parseConfig";
 import * as PATH from "path";

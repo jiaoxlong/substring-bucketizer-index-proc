@@ -13,13 +13,15 @@ import {
     winEscape,
     exists,
     extract_resource_from_uri, getMemberQuads, getRelationQuads,
-    n3_escape, replPredicate, SDSToTree, serialize_quads,
+    n3_escape, replPredicate, SDSToTree, serialize_quads, remainingItemsQuads,
 
 } from "./utils";
 import * as fs from "fs/promises";
 
 
 const queryEngine = new QueryEngine();
+
+const n3_writer = new n3.Writer()
 
 /**
  * The query_sparql processor fetches query result from a SPRAQL endpoint
@@ -38,7 +40,7 @@ async function doQuery(config: Config, writer: Writer<string>){
     const quads = await quadStream.toArray()
     await writer.push(serialize_quads(quads.map(q => <Quad>q)));
     await quadStream.close()
-    await writer.disconnect().then(()=>{ console.log('querySparql: writer stream is closed')})
+    await writer.end().then(()=>{ console.log('querySparql: writer stream is closed')})
 }
 
 /**
@@ -57,7 +59,7 @@ export async function sds_to_tree(configPath:string,
     // reader.on('end',()=>{
     //     treeMemberOutputStream.disconnect()
     // })
-    let counter = 0
+
     const treeify = async (quads:Quad[]) => {
         /** escape n3js issued symbols /[\x00-\x20<>\\"\{\}\|\^\`]/ */
         let t = ensure(quads.map(q => n3_escape(q)))
@@ -71,13 +73,13 @@ export async function sds_to_tree(configPath:string,
         for (const q of t) {
             tree_quads = [...tree_quads, ...addExtra(config, q)]
         }
-        counter+=1
         await treeMemberOutputStream.push(serialize_quads(tree_quads))
     }
     reader.data(treeify)
-    if(reader.lastElement){
-        console.log("treeify:", counter)
-    }
+    reader.on('end',()=>{
+        console.log("sds_to_tree: data is closed");
+        treeMemberOutputStream.end()
+    })
 }
 
 /**+
@@ -88,48 +90,62 @@ export async function sds_to_tree(configPath:string,
 export async function ingest(configPath: string, treeMemberInputStream: Stream<string>) {
     const config = getConfig(configPath)
     const out_dir = createDir(PATH.resolve('out'))
-    let counter:{[key:string]: any}= {}
+    let counter:{[key:string]: number}= {}
+    let counter_index:{[key:string]: any}={}
     const tree_collection = new TreeCollection(namedNode(config.namespaceIRI), configPath, new n3.Store())
     const tree_collection_out = PATH.join(out_dir, 'tree_collection.ttl')
     /** write tree collection meta quads */
     if (!exists(tree_collection_out)) {
         await fs.appendFile(tree_collection_out,
-            new n3.Writer().quadsToString(tree_collection.serialize_metadata()))
+            n3_writer.quadsToString(tree_collection.serialize_metadata()))
     }
-    const materialize = async (quadString: string) => {
+    treeMemberInputStream.on('data', async quadString =>{
         const quads = [... new Set(new n3.Parser().parse(quadString))]
-        /** member node(s)*/
-            // each chunk of quads is expected to have at least one treeNode
+        /** member node(s)
+         * each chunk of quads is expected to have at least one treeNode
+         */
         const buckets = [...new Set(quads.filter(q=>q.predicate.equals(SDS.terms.bucket)).map(q=><NamedNode>q.object))]
         /** member quads */
         const member_quads = getMemberQuads(config, quads)
         /** write member quads */
         for (const b of buckets) {
             const out = PATH.join(out_dir, winEscape(extract_resource_from_uri(b.value)) + '.ttl')
-            await fs.appendFile(out, new n3.Writer().quadsToString(member_quads))
-        }
-        /** relation quads */
-        const parent_buckets = [...new Set(quads.filter(q=>q.predicate.equals(TREE.terms.relation)).map(q=>q.subject.value))]
-        const rel_quads = getRelationQuads(config, quads, buckets, counter)
-        /** write relation quads */
-        if (rel_quads.length!=0) {
-            for (const p of parent_buckets) {
-                const rel_out = PATH.join(out_dir, winEscape(extract_resource_from_uri(p)) + '.ttl')
+            await fs.appendFile(out, n3_writer.quadsToString(member_quads))
+            /** update counter */
+            if (b.value in counter){
+                counter[b.value] += 1
+            }
+            else{
+                counter[b.value] = 1
+            }
+            /** relation quads */
+            const parent_buckets = [...new Set(quads.filter(q=>q.predicate.equals(TREE.terms.relation)).map(q=>q.subject.value))]
+            if (parent_buckets.length !== 0){
+                // only one parent bucket is expected; update counter_index
+                const parent_bucket = parent_buckets[0]
+                const rel_quads  = getRelationQuads(config, parent_bucket, quads, b.value, counter_index)
+                const rel_out = PATH.join(out_dir, winEscape(extract_resource_from_uri(parent_bucket)) + '.ttl')
                 if (exists(rel_out)) {
-                    await fs.appendFile(rel_out, new n3.Writer().quadsToString(rel_quads))
+                    await fs.appendFile(rel_out, n3_writer.quadsToString(rel_quads))
                 } else {
-                    //rel_quads.push(quad(namedNode(p), RDF.terms.type, TREE.terms.Node))
-                    await fs.appendFile(rel_out, new n3.Writer().quadsToString(rel_quads))
+                    await fs.appendFile(rel_out, n3_writer.quadsToString(rel_quads))
                 }
                 /** write relation quads to tree collection */
-                await fs.appendFile(tree_collection_out, new n3.Writer().quadsToString(rel_quads))
+                await fs.appendFile(tree_collection_out, n3_writer.quadsToString(rel_quads))
             }
         }
-    }
-    treeMemberInputStream.data(materialize)
+    } )
 
-    if(treeMemberInputStream.lastElement)
-        console.log("counter:",counter)
+    treeMemberInputStream.on('end', async()=>{
+        for(const b in counter){
+            /** write remainingItems quads */
+            const path = PATH.join(out_dir, winEscape(extract_resource_from_uri(b)) + '.ttl')
+            const remaining_quads_str = n3_writer.quadsToString(remainingItemsQuads(b, counter, counter_index))
+            await fs.appendFile(path, remaining_quads_str)
+            await fs.appendFile(tree_collection_out, remaining_quads_str)
+        }
+        console.log('ingest: successfully wrote files.')
+    })
 }
 
 

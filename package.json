@@ -8,7 +8,7 @@
     "test": "jest",
     "watch-test": "jest --watch"
   },
-  "files":  [
+  "files": [
     "./lib/src/*.js"
   ],
   "jest": {
@@ -54,7 +54,7 @@
     "@rdfjs/types": "^1.1.0",
     "@treecg/bucketizer-core": "^1.1.8",
     "@treecg/bucketizers": "^2.1.10",
-    "@treecg/connector-types": "1.1.5",
+    "@treecg/connector-types": "^1.1.11",
     "@treecg/ldes-substring-bucketizer": "^0.0.8-alpha.0",
     "@treecg/substring-bucketizer": "^2.1.6",
     "@treecg/types": "^0.4.5",

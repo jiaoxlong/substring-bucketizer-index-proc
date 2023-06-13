@@ -27,17 +27,41 @@ const fse= require("fs-extra");
  * @param relation a tree:Relation instance
  */
 
-export function remainingItemsCount(store:n3.Store, relation:BlankNode|NamedNode):number|undefined{
+export function remainingItemsCountStore(store:n3.Store, relation:BlankNode|NamedNode):number|undefined{
     let count = 0
     for (const sub_bucket of [...store.getObjects(relation, namedNode(SDS.relationBucket), null)]){
         let count_extra = [...store.getSubjects(namedNode(SDS.bucket), sub_bucket, null)].length
         count += count_extra;
         for (const sub_relation of [...store.getObjects(sub_bucket, namedNode(SDS.relation), null)]) {
-            count += remainingItemsCount(store,<BlankNode|NamedNode>sub_relation) || 0
+            count += remainingItemsCountStore(store,<BlankNode|NamedNode>sub_relation) || 0
         }
     }
     return count
 }
+
+
+export function remainingItemsCountStream(bucket:string, counter:{[key:string]: number}, counter_index:{[key:string]: any}):number{
+    let count = 0
+    if (counter_index[bucket] === undefined){
+        return 0
+    }
+    else{
+        for ( const rel in counter_index[bucket]) {
+            count += counter[counter_index[bucket][rel]]
+            count += remainingItemsCountStream(counter_index[bucket][rel], counter, counter_index)
+        }
+    }
+    return count
+}
+
+export function remainingItemsQuads(bucket:string, counter:{[key:string]: number}, counter_index:{[key:string]: any}):Quad[]{
+    const quads: Quad[] = []
+    for ( const rel in counter_index[bucket]){
+        quads.push(quad(blankNode(rel), TREE.terms.remainingItems, literal(remainingItemsCountStream(counter_index[bucket][rel], counter, counter_index))))
+    }
+    return quads
+}
+
 
 //https://stackoverflow.com/questions/11100821/javascript-regex-for-validating-filenames
 export const WIN_REGEX= new RegExp('^(con|prn|aux|nul|com[0-9]|lpt[0-9])$|([<>:"\\/\\\\|?*])|(\\.|\\s)$/ig')
@@ -224,10 +248,10 @@ export function createTreeRelation(relation:NamedNode|BlankNode, config:Config,s
     }
     const rel_bucket_value = [...store.getObjects(relation, SDS.terms.relationValue, null)]
     return new TreeRelation(<NamedNode|BlankNode>relation,
-            getValueByKeyForStringEnum(RelationType, config.relationType),
-            addBucketBase(config,namedNode(n3Escape(rel_bucket[0].value))),
-            <Literal[]>rel_bucket_value.map(v=>literal(n3Escape(v.value))),
-            namedNode(prop_path)
+        getValueByKeyForStringEnum(RelationType, config.relationType),
+        addBucketBase(config,namedNode(n3Escape(rel_bucket[0].value))),
+        <Literal[]>rel_bucket_value.map(v=>literal(n3Escape(v.value))),
+        namedNode(prop_path)
     )
 }
 export function addBucketBase(config:Config, nn:NamedNode|Literal){
@@ -284,7 +308,7 @@ export function addExtra(config:Config, q:Quad):Quad[]{
         else if (config.propertyPath instanceof Array)
             for (const prop_path of config.propertyPath) {
                 quads.push(quad(<BlankNode>q.object, TREE.terms.path, namedNode(prop_path)))
-        }
+            }
     return [...new Set(quads)]
 }
 
@@ -379,40 +403,55 @@ export function getMemberQuads(config:Config, quads:Quad[]):Quad[]{
     //return quads.filter(q => member_ids.some(x => x.equals(q)))
 }
 
-function getRelationBNs(config:Config, quads:Quad[]):string[]{
-    return [...new Set(quads.filter(q => q.predicate.equals(TREE.terms.relation)).map(q=><string>q.object.value))]
+function getRelationBNs(config:Config, quads:Quad[]):BlankNode[]{
+    return [...new Set(quads.filter(q => q.predicate.equals(TREE.terms.relation)).map(q=><BlankNode>q.object))]
 }
 
 function getNodeRelQuad(config:Config, quads:Quad[]):Quad[]{
     return quads.filter(q=>q.predicate.equals(TREE.terms.relation))
 }
 
-export function getRelationQuads(config:Config, quads:Quad[], nodes:NamedNode[], counter:{[key:string]: any}):Quad[]{
-    /** update counter */
-    const parent_node = getNodeRelQuad(config, quads).map(q=><string>q.subject.value)[0]
-    // structure: {"node":{"sub_node":count,... }}
-    for (const n of nodes){
-        if (parent_node in counter){
-            if (n.value in counter[parent_node])
-                counter[parent_node][n.value] += 1
-            else
-                counter[parent_node][n.value] = 1
-        }
-        else{
-            let sub_dic: {[key:string]: number}= {}
-            sub_dic[n.value] = 1
-            counter[parent_node]=sub_dic
+function getRelationNode(config:Config, quads:Quad[], rel_bn:BlankNode):string{
+    return quads.filter(q=>q.subject.equals(rel_bn) && q.predicate.equals(TREE.terms.node))
+        .map(q=><string>q.object.value)[0]
+}
+
+export function getRelationQuads(config:Config,
+                                 parent_bucket:string,
+                                 quads:Quad[],
+                                 bucket:string,
+                                 counter_index:{[key:string]:any}):Quad[]{
+    const parent_buckets = [...new Set(quads.filter(q=>q.predicate.equals(TREE.terms.relation)).map(q=>q.subject.value))]
+    if(parent_buckets.length !==0 ){
+        // add relation quads
+        const rel_blank_nodes = getRelationBNs(config, quads)
+        for (const rel of rel_blank_nodes) {
+            /** update counter_index
+             *  counter_index: {bucket:{relation:sub-bucket}}
+             */
+            const tree_node = getRelationNode(config, quads, rel)
+            if (parent_bucket in counter_index){
+                if (counter_index[parent_bucket][rel.value] === undefined){
+                    counter_index[parent_bucket][rel.value] = tree_node
+                }
+            }
+            else{
+                let sub_dic: {[key:string]: string}= {}
+                sub_dic[rel.value] = bucket
+                counter_index[parent_bucket] = sub_dic
+            }
         }
     }
+    const rel_bns = [...new Set(getRelationBNs(config, quads))]
     // tree:Relation rdf:type tree:SubstringRelation;
     //  tree:node tree:Node;
     //  tree:path <IRI>;
     //  tree:value xsd:string;
-    const rel_bns = getRelationBNs(config, quads)
-
     // tree:Node tree:relation tree:Relation.
+
     const node_rel_quad = getNodeRelQuad(config, quads)
-    return [...new Set([...quads.filter(q => rel_bns.includes(<string>q.subject.value)), ...node_rel_quad])]
+    const rel_quads = quads.filter(q => rel_bns.some(x=>x.equals(q.subject)))
+    return [...new Set([...rel_quads, ...node_rel_quad])]
 }
 
 export function safeAppendFile(out:string, quadString:string){
