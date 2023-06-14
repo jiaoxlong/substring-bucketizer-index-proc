@@ -22,7 +22,9 @@ const bluebirdPromise = require("bluebird");
 const fse= require("fs-extra");
 
 /**
- * counts the number of remaining items adheres to a substring relation
+ * [Obsolete] N3.Store approach
+ * which requires all quads to be loaded into a N3.Store at the first placed
+ * recursively counts the number of remaining items adheres to a substring relation
  * @param store an N3.Store instance
  * @param relation a tree:Relation instance
  */
@@ -39,7 +41,13 @@ export function remainingItemsCountStore(store:n3.Store, relation:BlankNode|Name
     return count
 }
 
-
+/**
+ * Streaming approach
+ * recursively counts the number of remaining items adheres to a substring relation
+ * @param bucket a bucket in counter
+ * @param counter an object stores bucket member counts
+ * @param counter_index an object describes parent-child relationship of buckets
+ */
 export function remainingItemsCountStream(bucket:string, counter:{[key:string]: number}, counter_index:{[key:string]: any}):number{
     let count = 0
     if (counter_index[bucket] === undefined){
@@ -54,6 +62,12 @@ export function remainingItemsCountStream(bucket:string, counter:{[key:string]: 
     return count
 }
 
+/**
+ * serialize quads for remaining items count
+ * @param bucket a bucket in counter
+ * @param counter an object stores bucket member counts
+ * @param counter_index an object describes parent-child relationship of buckets
+ */
 export function remainingItemsQuads(bucket:string, counter:{[key:string]: number}, counter_index:{[key:string]: any}):Quad[]{
     const quads: Quad[] = []
     for ( const rel in counter_index[bucket]){
@@ -110,6 +124,11 @@ export function winEscape(bucket_base:string):string{
     }
 }
 
+/**
+ * escape illegal symbols i.e. /[\x00-\x20<>\\"\{\}\|\^\`]/ by replacing them with a single quote for N3
+ * in the case of ERA, only '`' and '"' were detected. Thus, for the time being, only limited escape were implemented
+ * @param str string
+ */
 export function n3Escape(str:string):string{
     return str.replace("`", "'").replace('"',"'" )
 }
@@ -167,14 +186,10 @@ export function extract_resource_from_uri(s:string){
         return s
 }
 
-export async function writerToFile(content: any, location: string) {
-    try {
-        await fp.writeFile(location, content)
-    } catch (err) {
-        console.log(err)
-    }
-}
-
+/**
+ * validate a given path exists in file system
+ * @param path_ins path
+ */
 export function exists(path_ins:string) {
     try {
         return fs.statSync(path_ins).isFile()
@@ -184,19 +199,23 @@ export function exists(path_ins:string) {
     }
 }
 
-
 export const sparql_ask_query = `ASK {?s ?p ?o}`
+
+/**
+ * verify the connection to a SPARQL endpoint
+ * @param sparql_endpoint SPARQL endpoint url defined in the ./config/config.json
+ * @param sparql_query a SPARQL query
+ */
 export async function isSPARQLEndpoint (sparql_endpoint:string, sparql_query:string){
     const queryEngine = new QueryEngine();
     return await queryEngine.queryBoolean(sparql_query,
         {sources:[sparql_endpoint]})
 }
-export async function sparql_query(sparql_endpoint:string, sparql_query:string){
-    const queryEngine = new QueryEngine();
-    return await queryEngine.queryQuads(sparql_query,
-        {sources:[sparql_endpoint]})
-}
 
+/**
+ * verify a given URL if it is valid
+ * @param s an URL
+ */
 export function isValidURL(s:string) {
     //https://www.freecodecamp.org/news/check-if-a-javascript-string-is-a-url/
     const urlPattern = new RegExp('^(https?:\\/\\/)?' + // validate protocol
@@ -208,6 +227,10 @@ export function isValidURL(s:string) {
     return !!urlPattern.test(s)
 }
 
+/**
+ * create a directory under a given path if it does not exists
+ * @param dir_name path to the directory
+ */
 export function createDir(dir_name:string):string{
     if(!fs.existsSync(PATH.resolve(dir_name)))
         fs.mkdirSync(PATH.resolve(dir_name), {recursive: true})
@@ -218,19 +241,9 @@ export function isTreeCollection(quadString: string):boolean{
     return (quadString.match(tree_collection_regex) ===null) ? false : true
 }
 
-export function treeCollectionID(quadString:string):string{
-    return tree_collection_regex.exec(quadString)![1]
-}
-
-export function treeNodeID(quadString:string):string{
-    //console.log(quadString)
-    return tree_node_regex.exec(quadString)![1]
-}
 
 const tree_collection_regex = new RegExp("(.+)\\s{1,4}a\\s{1,4}(?:tree:|.+\\#)Collection")
 const tree_node_regex = new RegExp("(.+)\\s{1,4}rdf:type")
-
-
 
 export function getValueByKeyForStringEnum(obj:Object, value: string) {
     return Object.entries(obj).find(([key, val]) => key === value)?.[1];
@@ -312,7 +325,10 @@ export function addExtra(config:Config, q:Quad):Quad[]{
     return [...new Set(quads)]
 }
 
-
+/**
+ * in connection to n3Escape, n3_escape implements n3Escape on the subject and object of a quad
+ * @param q a quad
+ */
 export function n3_escape(q:Quad|undefined){
     /** Quad[] may be populated with n3.Quad or other Quad inherited from rdfjs.Quad
      *  Thus, it is safe to set the condition to check if Term.termType === 'x' instead of using instanceof

@@ -16,10 +16,3 @@ describe('validate bucket/node to be used for naming files', ()=> {
         expect(n3Escape(bucket3)).toEqual("<>:'")
     });
 })
-
-// describe('vadliate remainingItemsCount', ()=>{
-//      test('remaining items count over an instance of a n3.Store', ()=>{
-//
-//
-//      })
-// })
